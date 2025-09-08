@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplicativo Interactivo: Introducción a la Minería de Texto</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            color: #333;
+            scroll-behavior: smooth;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 25px 0;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2.8em;
+            letter-spacing: 1px;
+        }
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        section {
+            margin-bottom: 40px;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        section:last-of-type {
+            border-bottom: none;
+        }
+        h2 {
+            color: #2980b9;
+            font-size: 2em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+        }
+        h2 i {
+            margin-right: 15px;
+            color: #3498db;
+            font-size: 1.2em;
+        }
+        h3 {
+            color: #34495e;
+            font-size: 1.5em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        p {
+            margin-bottom: 15px;
+        }
+        strong {
+            color: #e74c3c;
+        }
+        em {
+            color: #f39c12;
+        }
+        mark {
+            background-color: #d8f5a2;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        ul, ol {
+            margin-bottom: 15px;
+            padding-left: 25px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .citation {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-left: 5px;
+        }
+
+        /* Acordeones */
+        .accordion-item {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+        .accordion-header {
+            background-color: #ecf0f1;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            color: #2c3e50;
+            transition: background-color 0.3s ease;
+        }
+        .accordion-header:hover {
+            background-color: #dbe4e6;
+        }
+        .accordion-header i {
+            transition: transform 0.3s ease;
+        }
+        .accordion-content {
+            padding: 15px 20px;
+            background-color: #fcfcfc;
+            border-top: 1px solid #eee;
+            display: none; /* Oculto por defecto */
+            animation: slideDown 0.4s ease-out;
+        }
+        .accordion-item.active .accordion-content {
+            display: block;
+        }
+        .accordion-item.active .accordion-header {
+            background-color: #dbe4e6;
+        }
+        .accordion-item.active .accordion-header i {
+            transform: rotate(180deg);
+        }
+
+        /* Pestañas */
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ccc;
+        }
+        .tab-button {
+            background-color: #eee;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            color: #555;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        .tab-button:hover {
+            background-color: #ddd;
+        }
+        .tab-button.active {
+            background-color: #3498db;
+            color: #fff;
+            border-bottom: 2px solid #3498db;
+            transform: translateY(2px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .tab-content {
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background-color: #fdfdfd;
+            display: none; /* Oculto por defecto */
+            animation: fadeIn 0.5s ease-out;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Código Python */
+        pre {
+            background-color: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.95em;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        code {
+            font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            font-size: 0.9em;
+            background-color: rgba(0, 0, 0, 0.05);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .code-highlight {
+            color: #66d9ef; /* Color para palabras clave */
+        }
+        .code-string {
+            color: #e6db74; /* Color para strings */
+        }
+        .code-comment {
+            color: #75715e; /* Color para comentarios */
+        }
+        .code-function {
+            color: #a6e22e; /* Color para funciones */
+        }
+        .code-variable {
+            color: #fd971f; /* Color para variables */
+        }
+        .code-number {
+            color: #ae81ff; /* Color para números */
+        }
+
+        /* Glosario */
+        .glossary-section p {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .glossary-term {
+            cursor: pointer;
+            color: #3498db;
+            font-weight: bold;
+            text-decoration: underline dotted;
+            transition: color 0.2s ease;
+            white-space: nowrap; /* Evita que los términos se rompan */
+        }
+        .glossary-term:hover {
+            color: #2980b9;
+        }
+        .glossary-definition {
+            font-style: italic;
+            color: #555;
+            margin-top: 5px;
+            padding-left: 20px;
+            border-left: 2px solid #3498db;
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+            width: 100%; /* Para que la definición ocupe toda la línea */
+            box-sizing: border-box;
+        }
+
+        /* Animaciones */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Timeline (Ejemplo sencillo) */
+        .timeline {
+            position: relative;
+            margin: 50px 0;
+            padding: 20px 0;
+            list-style: none;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background: #ccd1d9;
+            transform: translateX(-50%);
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 30px;
+            width: 50%;
+            padding: 10px 40px;
+            box-sizing: border-box;
+        }
+        .timeline-item:nth-child(odd) {
+            left: 0;
+            text-align: right;
+        }
+        .timeline-item:nth-child(even) {
+            left: 50%;
+            text-align: left;
+        }
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3498db;
+            border: 2px solid #fff;
+            top: 15px;
+            z-index: 1;
+        }
+        .timeline-item:nth-child(odd)::after {
+            right: -8px;
+            transform: translateX(50%);
+        }
+        .timeline-item:nth-child(even)::after {
+            left: -8px;
+            transform: translateX(-50%);
+        }
+        .timeline-content {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+        }
+        .timeline-date {
+            font-weight: bold;
+            color: #e74c3c;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 50px;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 0 0 10px 10px;
+        }
+        footer p {
+            margin: 0;
+            font-size: 0.9em;
+        }
+        footer a {
+            color: #3498db;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        footer a:hover {
+            color: #ecf0f1;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+            header h1 {
+                font-size: 2em;
+            }
+            h2 {
+                font-size: 1.6em;
+            }
+            h3 {
+                font-size: 1.3em;
+            }
+            .timeline::before {
+                left: 20px;
+            }
+            .timeline-item {
+                width: 100%;
+                padding-left: 60px;
+                padding-right: 15px;
+            }
+            .timeline-item:nth-child(odd) {
+                text-align: left;
+                left: 0;
+            }
+            .timeline-item:nth-child(even) {
+                left: 0;
+            }
+            .timeline-item::after {
+                left: 12px;
+                transform: translateX(-50%);
+            }
+            .timeline-item:nth-child(odd)::after {
+                right: auto;
+            }
+             .glossary-section p {
+                flex-direction: column; /* Apilar términos en pantallas pequeñas */
+                align-items: flex-start;
+            }
+            .glossary-term + .citation {
+                 margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Introducción a la Minería de Texto</h1>
+            <p>Un recorrido pedagógico por los conceptos, técnicas y aplicaciones clave.</p>
+        </header>
+
+        <section id="introduccion">
+            <h2><i class="fas fa-lightbulb"></i> Introducción: Desvelando el Poder del Texto</h2>
+            <p>En la era digital actual, la cantidad de información generada y almacenada en formato de texto no estructurado es <mark>inmensa</mark>, estimándose que hasta el 85% de la información empresarial existe como texto <span class="citation">[1-6]</span>. Desde informes corporativos y documentos científicos hasta publicaciones en redes sociales y correos electrónicos, el texto es un <mark>valioso repositorio de conocimiento</mark> <span class="citation">[7-10]</span>. Sin embargo, la naturaleza <mark>no estructurada, ambigua y a menudo vaga</mark> del lenguaje natural presenta desafíos significativos para su procesamiento automático por computadoras <span class="citation">[6, 11-19]</span>.</p>
+            <p>Aquí es donde entra en juego la <strong>Minería de Texto</strong>, también conocida como <mark>Minería de Datos de Texto</mark> (Text Data Mining) o <mark>Analítica de Texto</mark> (Text Analytics), es el proceso de derivar información de alta calidad a partir de textos <span class="citation">[20, 21]</span>. Su objetivo principal es la <mark>extracción no trivial de información y conocimiento útil, previamente desconocido e implícito</mark>, a partir de grandes volúmenes de recursos textuales <span class="citation">[19, 22-27]</span>. Al transformar el texto no estructurado en un formato estructurado, la minería de texto permite la aplicación de metodologías avanzadas de análisis para descubrir patrones y relaciones que de otro modo pasarían desapercibidos para la capacidad analítica humana <span class="citation">[18, 24-26, 28-32]</span>.</p>
+            <h3><i class="fas fa-share-alt"></i> Relación con Campos Afines</h3>
+            <p>La minería de texto es un campo inherentemente <em>multidisciplinario</em>, que se sitúa en la intersección de varias áreas de investigación <span class="citation">[12, 29, 30, 33-39]</span>. Sus principales componentes incluyen:</p>
+            <ul>
+                <li><strong>Recuperación de Información (IR - Information Retrieval):</strong> Se enfoca en la <mark>localización y recuperación de documentos relevantes</mark> de una gran colección que satisfacen una consulta del usuario, más que en la extracción de respuestas directas <span class="citation">[14, 27, 40-49]</span>. Sistemas como los motores de búsqueda web (e.g., Google, Bing) o los catálogos de bibliotecas son ejemplos clave de IR <span class="citation">[46, 50]</span>.</li>
+                <li><strong>Procesamiento del Lenguaje Natural (PNL - Natural Language Processing):</strong> Se ocupa del <mark>análisis y procesamiento del lenguaje natural mediante el uso de metodologías informáticas</mark> <span class="citation">[48, 50-54]</span>. El PNL busca dotar al computador de conocimientos lingüísticos para comprender y producir lenguaje, manejando sus complejidades, ambigüedades y diversidad <span class="citation">[15, 16, 55, 56]</span>. Es crucial para tareas como la traducción automática, reconocimiento de voz, análisis morfológico, sintáctico y semántico <span class="citation">[48, 53-55, 57]</span>.</li>
+                <li><strong>Extracción de Información (IE - Information Extraction):</strong> Se centra en la <mark>identificación y extracción automática de información específica y estructurada</mark> (como nombres de personas, organizaciones, ubicaciones, fechas, etc.) a partir de textos no estructurados <span class="citation">[27, 36, 48, 57-68]</span>. El objetivo es llenar plantillas o bases de datos con estos datos estructurados para su posterior análisis <span class="citation">[59, 63, 64, 69-73]</span>.</li>
+                <li><strong>Minería de Datos (DM - Data Mining):</strong> Implica la <mark>extracción de patrones y conocimiento a partir de datos estructurados</mark> <span class="citation">[6, 30, 42, 74, 75]</span>. La minería de texto puede verse como un tipo específico de minería de datos, donde el enfoque está en los documentos de texto <span class="citation">[12, 21, 42, 74, 76-78]</span>.</li>
+            </ul>
+        </section>
+
+        <section id="etapas-clave">
+            <h2><i class="fas fa-cogs"></i> Etapas Clave del Proceso de Minería de Texto</h2>
+            <p>El proceso de minería de texto generalmente sigue una serie de pasos secuenciales para transformar el texto en información procesable y luego extraer patrones de ella <span class="citation">[36, 79-87]</span>:</p>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-brush"></i> 1. Preprocesamiento de Texto (Normalización)</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Esta etapa es crucial para <mark>limpiar y preparar los datos textuales</mark>, reduciendo el texto a las palabras esenciales y uniformizando el vocabulario para que los algoritmos de minería de datos puedan procesarlos eficientemente <span class="citation">[50, 67, 79, 83, 84, 86, 88-102]</span>. Incluye:</p>
+                    <ul>
+                        <li><strong>Limpieza de Datos (Text Cleanup):</strong> Eliminar información innecesaria como etiquetas HTML, puntuación excesiva, caracteres especiales, números (si no son relevantes), espacios en blanco múltiples, etc. <span class="citation">[88, 93, 94, 100, 101, 103-107]</span>. También puede implicar la normalización de texto convertido de formatos binarios <span class="citation">[94, 107]</span>.</li>
+                        <li><strong>Tokenización (Tokenization):</strong> Es el proceso de <mark>dividir el texto en unidades lingüísticas más pequeñas llamadas <em>tokens</em></mark> <span class="citation">[79, 83, 88, 92-94, 98, 99, 101, 105-110]</span>. Generalmente, los tokens son palabras, pero también pueden ser números, signos de puntuación o n-gramas <span class="citation">[88, 101, 108]</span>. Los algoritmos de tokenización deben considerar las características del lenguaje, como apóstrofes, guiones, y si los espacios en blanco múltiples son significativos <span class="citation">[88, 94, 106]</span>.</li>
+                        <li><strong>Eliminación de Stop Words (Stop-word Removal):</strong> Remover palabras muy comunes que generalmente <mark>no aportan un significado sustantivo</mark> al análisis, como "el", "la", "y", "es" <span class="citation">[79, 93, 104, 111-123]</span>.</li>
+                        <li><strong>Stemming:</strong> Proceso opcional para <mark>reducir las palabras a su raíz o "stem"</mark> <span class="citation">[79, 83, 92, 93, 98, 104, 111, 114, 121, 124-127]</span>. Por ejemplo, "caminando", "caminé" y "camina" se reducirían a "camin" (en inglés, "walk" para "walking", "walked", "walks"). Algoritmos comunes incluyen el algoritmo de Porter <span class="citation">[111, 114, 127, 128]</span>. Reduce la dimensionalidad del conjunto de características <span class="citation">[114, 125]</span>.</li>
+                        <li><strong>Lematización (Lemmatization):</strong> Alternativa al stemming, reduce las palabras a su <mark>forma canónica o <em>lemma</em></mark> <span class="citation">[83, 88, 92, 98, 127, 129-134]</span>. A diferencia del stemming, la lematización garantiza que la forma resultante sea una palabra válida en el idioma y considera el contexto morfológico (ej., "camina", "caminó" se transforman en "caminar") <span class="citation">[115, 116, 129]</span>. Puede ser más compleja debido a las ambigüedades (ej., "juegos" puede ser plural de "juego" o conjugación de "jugar") <span class="citation">[129, 130, 135]</span>. El módulo WordNet es una herramienta útil para esto <span class="citation">[130-133, 136-140]</span>.</li>
+                        <li><strong>Etiquetado de Partes de la Oración (POS Tagging - Part-of-Speech Tagging):</strong> Asigna a cada token su <mark>categoría gramatical</mark> (sustantivo, verbo, adjetivo, etc.) <span class="citation">[79, 83, 88, 93, 94, 98, 113, 134, 135, 137-152]</span>. Es útil para el análisis sintáctico y semántico, así como para la selección de características <span class="citation">[141, 146, 149]</span>.</li>
+                        <li><strong>Generación de N-gramas:</strong> Considerar secuencias de palabras contiguas (bigramas, trigramas, etc.) en lugar de palabras individuales para capturar contexto y relaciones entre palabras <span class="citation">[28, 93, 141, 153-155]</span>.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-database"></i> 2. Representación de Texto (Vectorización)</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Los computadores no trabajan directamente con texto, sino con <mark>números</mark> <span class="citation">[156, 157]</span>. Esta etapa transforma el texto preprocesado en un <mark>formato numérico estructurado</mark> (vectores) que los algoritmos de aprendizaje automático pueden utilizar <span class="citation">[39, 83, 90, 134, 156-167]</span>.</p>
+                    <ul>
+                        <li><strong>Bag of Words (BoW):</strong> Representa un documento como una <mark>colección (bolsa) de palabras</mark>, ignorando su orden sintáctico pero registrando su presencia o frecuencia <span class="citation">[38, 90, 134, 156-158, 160, 161, 168-171]</span>. Cada palabra única en el corpus se convierte en una característica, y el documento se representa como un vector donde los valores indican la ocurrencia o frecuencia de cada palabra <span class="citation">[158, 168, 170, 172]</span>.</li>
+                        <li><strong>TF-IDF (Term Frequency-Inverse Document Frequency):</strong> Es una función ampliamente utilizada en IR y minería de texto para medir la <mark>importancia de un término</mark> en un documento dentro de una colección <span class="citation">[83, 118, 120, 122, 134, 156, 157, 170, 173-185]</span>. Aumenta proporcionalmente con la frecuencia del término en el documento (TF), pero disminuye inversamente con la frecuencia del término en toda la colección (IDF) <span class="citation">[122, 174, 177, 181]</span>. Esto da <mark>más peso a las palabras raras y menos a las comunes</mark> (como las stop words) <span class="citation">[122, 177]</span>.</li>
+                        <li><strong>Word Embeddings (Incrustaciones de Palabras):</strong> Representan las palabras como <mark>vectores de números reales</mark> en un espacio de alta dimensión <span class="citation">[83, 93, 161, 186-188]</span>. Estos vectores se aprenden de tal manera que las palabras semánticamente relacionadas (ej., "perro", "cachorro") terminan en ubicaciones similares en el espacio vectorial, lo que les permite manejar mejor los sinónimos y términos relacionados que el enfoque Bag-of-Words <span class="citation">[186, 188]</span>. Ejemplos notables incluyen Word2Vec, GloVe y BERT <span class="citation">[188, 189]</span>.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-brain"></i> 3. Minería de Datos (Análisis de Patrones)</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Una vez que el texto ha sido transformado en datos estructurados, se aplican las <mark>técnicas clásicas de minería de datos</mark> y aprendizaje automático para encontrar patrones y extraer conocimiento <span class="citation">[27, 84, 190]</span>.</p>
+                    <ul>
+                        <li><strong>Clustering (Agrupamiento):</strong> Divide una colección de documentos en grupos (clusters) de tal manera que los documentos dentro de un mismo cluster son más similares entre sí que con los documentos de otros clusters <span class="citation">[14, 27, 29, 36, 47, 62, 152, 191-198]</span>. Es una técnica de <mark>aprendizaje no supervisado</mark>, útil cuando no se tiene una idea clara de cómo categorizar los documentos <span class="citation">[36, 191]</span>. El algoritmo K-means es uno de los más utilizados en minería de texto <span class="citation">[62, 199-202]</span>.</li>
+                        <li><strong>Clasificación (Classification):</strong> Asigna automáticamente documentos a una o más categorías o clases predefinidas <span class="citation">[27, 29, 47, 191-194, 197, 198, 203-206]</span>. Es una técnica de <mark>aprendizaje supervisado</mark>, donde se entrena un modelo con un conjunto de documentos etiquetados para predecir la clase de nuevos documentos <span class="citation">[175, 187, 191, 207]</span>. Aplicaciones incluyen la clasificación de noticias, detección de spam y análisis de sentimiento <span class="citation">[35, 55, 208-210]</span>.</li>
+                        <li><strong>Análisis de Asociaciones:</strong> Busca relaciones y dependencias entre términos o patrones de texto, como "si A ocurre, entonces B tiende a ocurrir" <span class="citation">[192, 211]</span>.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-chart-line"></i> 4. Interpretación y Evaluación</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>La etapa final implica <mark>interpretar los patrones descubiertos</mark> y evaluar la calidad de los resultados <span class="citation">[190, 204, 212, 213]</span>. Esto puede llevar a la terminación del proceso si los resultados son satisfactorios o a una iteración volviendo a etapas anteriores con ajustes <span class="citation">[78, 190, 212]</span>. La evaluación puede implicar métricas de rendimiento y la validación por expertos humanos <span class="citation">[89, 204, 212-218]</span>.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="ejemplos-python">
+            <h2><i class="fab fa-python"></i> Ejemplos Prácticos en Python</h2>
+            <p>Utilizaremos la biblioteca <strong>NLTK (Natural Language Toolkit)</strong> para el preprocesamiento y <strong>Scikit-learn</strong> para la vectorización, herramientas fundamentales en la minería de texto con Python <span class="citation">[160, 219, 220]</span>. Estos ejemplos requieren tener instaladas estas librerías en su entorno Python.</p>
+
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="openTab(event, 'tokenizacion-py')">Tokenización</button>
+                <button class="tab-button" onclick="openTab(event, 'stemming-py')">Stemming</button>
+                <button class="tab-button" onclick="openTab(event, 'lemmatizacion-py')">Lematización</button>
+                <button class="tab-button" onclick="openTab(event, 'bow-py')">Bag of Words</button>
+                <button class="tab-button" onclick="openTab(event, 'tf-idf-py')">TF-IDF</button>
+            </div>
+
+            <div id="tokenizacion-py" class="tab-content active">
+                <h3>Tokenización</h3>
+                <p>Dividir el texto en palabras individuales o <em>tokens</em>. NLTK ofrece funciones para esto <span class="citation">[221, 222]</span>.</p>
+                <pre><code><span class="code-comment"># Importar la librería NLTK y el tokenizador de palabras</span>
+<span class="code-highlight">import</span> <span class="code-function">nltk</span>
+<span class="code-function">nltk.download</span>(<span class="code-string">'punkt'</span>) <span class="code-comment"># Descargar datos necesarios para el tokenizador (una sola vez)</span>
+<span class="code-highlight">from</span> <span class="code-function">nltk.tokenize</span> <span class="code-highlight">import</span> <span class="code-function">word_tokenize</span>
+
+<span class="code-variable">texto_ejemplo</span> = <span class="code-string">"La minería de texto es fascinante y muy útil."</span>
+<span class="code-variable">tokens</span> = <span class="code-function">word_tokenize</span>(<span class="code-variable">texto_ejemplo</span>, <span class="code-string">'spanish'</span>) <span class="code-comment"># 'spanish' para tokenizar en español</span>
+
+<span class="code-function">print</span>(<span class="code-string">f"Texto original: {texto_ejemplo}"</span>)
+<span class="code-function">print</span>(<span class="code-string">f"Tokens: {tokens}"</span>)
+</code></pre>
+                <p>Este código resultará en una lista de palabras, separando también la puntuación como un token independiente <span class="citation">[221, 222]</span>.</p>
+            </div>
+
+            <div id="stemming-py" class="tab-content">
+                <h3>Stemming</h3>
+                <p>Reducir las palabras a su raíz o <em>stem</em>. El <strong>PorterStemmer</strong> es un algoritmo popular, aunque más agresivo <span class="citation">[111, 114, 124, 127, 128, 160, 223]</span>. Para español, existen stemmers específicos como Snowball.</p>
+                <pre><code><span class="code-comment"># Importar el stemmer de Snowball (mejor para español)</span>
+<span class="code-highlight">from</span> <span class="code-function">nltk.stem.snowball</span> <span class="code-highlight">import</span> <span class="code-function">SnowballStemmer</span>
+
+<span class="code-variable">stemmer</span> = <span class="code-function">SnowballStemmer</span>(<span class="code-string">'spanish'</span>)
+<span class="code-variable">palabras</span> = [<span class="code-string">"programación"</span>, <span class="code-string">"programador"</span>, <span class="code-string">"programar"</span>, <span class="code-string">"corriendo"</span>, <span class="code-string">"correr"</span>, <span class="code-string">"estudios"</span>, <span class="code-string">"estudiar"</span>]
+<span class="code-variable">stems</span> = [<span class="code-variable">stemmer.stem</span>(<span class="code-variable">palabra</span>) <span class="code-highlight">for</span> <span class="code-variable">palabra</span> <span class="code-highlight">in</span> <span class="code-variable">palabras</span>]
+
+<span class="code-function">print</span>(<span class="code-string">f"Palabras originales: {palabras}"</span>)
+<span class="code-function">print</span>(<span class="code-string">f"Stems: {stems}"</span>)
+</code></pre>
+                <p>Observe cómo "programación", "programador", "programar" podrían reducirse a "program" o "programa" y "corriendo", "correr" a "corr", no necesariamente resultando en una palabra válida, pero útil para agrupar variantes y reducir la dimensionalidad <span class="citation">[111, 114, 125]</span>.</p>
+            </div>
+
+            <div id="lemmatizacion-py" class="tab-content">
+                <h3>Lematización</h3>
+                <p>Reducir palabras a su forma base o <em>lemma</em>, asegurando que sea una palabra válida y con significado. <strong>WordNetLemmatizer</strong> es comúnmente usado para inglés <span class="citation">[129-133, 136-140]</span>. Requiere etiquetas POS para mayor precisión.</p>
+                <pre><code><span class="code-comment"># Importar el lematizador de WordNet y los recursos de WordNet</span>
+<span class="code-highlight">import</span> <span class="code-function">nltk</span>
+<span class="code-highlight">from</span> <span class="code-function">nltk.stem</span> <span class="code-highlight">import</span> <span class="code-function">WordNetLemmatizer</span>
+<span class="code-highlight">from</span> <span class="code-function">nltk.corpus</span> <span class="code-highlight">import</span> <span class="code-function">wordnet</span>
+<span class="code-function">nltk.download</span>(<span class="code-string">'wordnet'</span>) <span class="code-comment"># Descargar WordNet (una sola vez)</span>
+<span class="code-function">nltk.download</span>(<span class="code-string">'omw-1.4'</span>) <span class="code-comment"># Open Multilingual Wordnet (si se necesita para otros idiomas)</span>
+<span class="code-function">nltk.download</span>(<span class="code-string">'averaged_perceptron_tagger'</span>) <span class="code-comment"># Para POS tagging automático (una sola vez)</span>
+
+<span class="code-variable">lemmatizer</span> = <span class="code-function">WordNetLemmatizer</span>()
+<span class="code-variable">palabras_pos</span> = [<span class="code-string">"companies"</span>, <span class="code-string">"had"</span>, <span class="code-string">"running"</span>, <span class="code-string">"better"</span>, <span class="code-string">"geese"</span>]
+
+<span class="code-comment"># Función simple para obtener el tag de WordNet del POS tag de NLTK</span>
+<span class="code-highlight">def</span> <span class="code-function">get_wordnet_pos</span>(<span class="code-variable">word</span>):
+    <span class="code-variable">tag</span> = <span class="code-function">nltk.pos_tag</span>([<span class="code-variable">word</span>])[<span class="code-number">0</span>][<span class="code-number">1</span>][<span class="code-number">0</span>].<span class="code-function">upper</span>()
+    <span class="code-variable">tag_dict</span> = {<span class="code-string">"J"</span>: <span class="code-variable">wordnet.ADJ</span>,
+                <span class="code-string">"N"</span>: <span class="code-variable">wordnet.NOUN</span>,
+                <span class="code-string">"V"</span>: <span class="code-variable">wordnet.VERB</span>,
+                <span class="code-string">"R"</span>: <span class="code-variable">wordnet.ADV</span>}
+    <span class="code-highlight">return</span> <span class="code-variable">tag_dict</span>.<span class="code-function">get</span>(<span class="code-variable">tag</span>, <span class="code-variable">wordnet.NOUN</span>)
+
+<span class="code-variable">lemmas</span> = [<span class="code-variable">lemmatizer.lemmatize</span>(<span class="code-variable">palabra</span>, <span class="code-function">get_wordnet_pos</span>(<span class="code-variable">palabra</span>)) <span class="code-highlight">for</span> <span class="code-variable">palabra</span> <span class="code-highlight">in</span> <span class="code-variable">palabras_pos</span>]
+
+<span class="code-function">print</span>(<span class="code-string">f"Palabras originales: {palabras_pos}"</span>)
+<span class="code-function">print</span>(<span class="code-string">f"Lemmas: {lemmas}"</span>)
+</code></pre>
+                <p>En este ejemplo para inglés, "companies" se convierte en "company", "had" en "have", "running" en "run", "better" en "good" y "geese" en "goose", manteniendo el significado y la forma base de la palabra <span class="citation">[115, 116, 129]</span>.</p>
+            </div>
+
+            <div id="bow-py" class="tab-content">
+                <h3>Bag of Words (BoW)</h3>
+                <p>Representa el texto como un vector de recuentos de palabras. <strong>CountVectorizer</strong> de Scikit-learn facilita esta tarea <span class="citation">[159, 168, 169, 224]</span>.</p>
+                <pre><code><span class="code-comment"># Importar CountVectorizer de Scikit-learn</span>
+<span class="code-highlight">from</span> <span class="code-function">sklearn.feature_extraction.text</span> <span class="code-highlight">import</span> <span class="code-function">CountVectorizer</span>
+
+<span class="code-variable">corpus</span> = [
+    <span class="code-string">"Me encanta la minería de texto."</span>,
+    <span class="code-string">"La minería de datos es muy útil."</span>,
+    <span class="code-string">"Texto y datos son importantes."</span>
+]
+
+<span class="code-variable">vectorizer</span> = <span class="code-function">CountVectorizer</span>()
+<span class="code-variable">X</span> = <span class="code-variable">vectorizer.fit_transform</span>(<span class="code-variable">corpus</span>)
+
+<span class="code-function">print</span>(<span class="code-string">"Vocabulario:"</span>, <span class="code-variable">vectorizer.get_feature_names_out</span>())
+<span class="code-function">print</span>(<span class="code-string">"Matriz Bag of Words:"</span>)
+<span class="code-function">print</span>(<span class="code-variable">X.toarray</span>())
+</code></pre>
+                <p>Cada fila de la matriz representa un documento, y cada columna una palabra única del vocabulario. Los valores son los recuentos de cada palabra en el documento <span class="citation">[159, 170, 172]</span>.</p>
+            </div>
+
+            <div id="tf-idf-py" class="tab-content">
+                <h3>TF-IDF (Term Frequency-Inverse Document Frequency)</h3>
+                <p>Calcula la importancia de las palabras, ponderando su frecuencia local y global. <strong>TfidfVectorizer</strong> de Scikit-learn es la herramienta para esto <span class="citation">[170, 173, 176, 178, 179, 225]</span>.</p>
+                <pre><code><span class="code-comment"># Importar TfidfVectorizer de Scikit-learn</span>
+<span class="code-highlight">from</span> <span class="code-function">sklearn.feature_extraction.text</span> <span class="code-highlight">import</span> <span class="code-function">TfidfVectorizer</span>
+
+<span class="code-variable">corpus</span> = [
+    <span class="code-string">"Me encanta la minería de texto."</span>,
+    <span class="code-string">"La minería de datos es muy útil."</span>,
+    <span class="code-string">"Texto y datos son importantes."</span>
+]
+
+<span class="code-variable">vectorizer</span> = <span class="code-function">TfidfVectorizer</span>()
+<span class="code-variable">X</span> = <span class="code-variable">vectorizer.fit_transform</span>(<span class="code-variable">corpus</span>)
+
+<span class="code-function">print</span>(<span class="code-string">"Vocabulario:"</span>, <span class="code-variable">vectorizer.get_feature_names_out</span>())
+<span class="code-function">print</span>(<span class="code-string">"Matriz TF-IDF:"</span>)
+<span class="code-function">print</span>(<span class="code-variable">X.toarray</span>())
+</code></pre>
+                <p>La matriz TF-IDF mostrará valores ponderados que reflejan la relevancia de cada palabra para cada documento en el corpus <span class="citation">[174, 176, 177, 182]</span>.</p>
+            </div>
+        </section>
+
+        <section id="mapas-mentales">
+            <h2><i class="fas fa-sitemap"></i> Mapas Mentales de Conceptos Clave</h2>
+            <p>Un mapa mental ayuda a visualizar las relaciones entre conceptos. A continuación, se presenta una estructura de ejemplo para un mapa mental interactivo que agrupa los elementos principales de la minería de texto. Para una representación gráfica completa con funciones de zoom y reorganización, se requeriría una implementación avanzada con bibliotecas JavaScript como D3.js o GoJS. Aquí se muestra su estructura jerárquica.</p>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-project-diagram"></i> Proceso de Minería de Texto</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <ul>
+                        <li><strong>Minería de Texto</strong>
+                            <ul>
+                                <li><strong>I. Recuperación de Información</strong> <span class="citation">[41]</span>
+                                    <ul>
+                                        <li>Búsqueda de documentos relevantes <span class="citation">[40]</span></li>
+                                        <li>Motores de búsqueda <span class="citation">[50]</span></li>
+                                    </ul>
+                                </li>
+                                <li><strong>II. Preprocesamiento de Texto</strong> <span class="citation">[94]</span>
+                                    <ul>
+                                        <li>Limpieza de datos (puntuación, HTML) <span class="citation">[93]</span></li>
+                                        <li>Tokenización (palabras, n-gramas) <span class="citation">[108]</span></li>
+                                        <li>Eliminación de Stop Words <span class="citation">[113]</span></li>
+                                        <li>Stemming (raíz de la palabra) <span class="citation">[111]</span></li>
+                                        <li>Lematización (forma canónica) <span class="citation">[129]</span></li>
+                                        <li>POS Tagging (categoría gramatical) <span class="citation">[89]</span></li>
+                                    </ul>
+                                </li>
+                                <li><strong>III. Representación del Texto</strong> <span class="citation">[158]</span>
+                                    <ul>
+                                        <li>Bag of Words (frecuencia) <span class="citation">[160]</span></li>
+                                        <li>TF-IDF (importancia ponderada) <span class="citation">[177]</span></li>
+                                        <li>Word Embeddings (semántica vectorial) <span class="citation">[186]</span></li>
+                                    </ul>
+                                </li>
+                                <li><strong>IV. Minería de Datos / Análisis de Patrones</strong> <span class="citation">[190]</span>
+                                    <ul>
+                                        <li>Clustering (agrupamiento no supervisado) <span class="citation">[192]</span></li>
+                                        <li>Clasificación (categorización supervisada) <span class="citation">[187]</span></li>
+                                        <li>Análisis de Asociaciones <span class="citation">[192]</span></li>
+                                    </ul>
+                                </li>
+                                <li><strong>V. Interpretación y Evaluación</strong> <span class="citation">[190]</span></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-cubes"></i> Componentes y Aplicaciones de la Minería de Texto</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <ul>
+                        <li><strong>Minería de Texto</strong>
+                            <ul>
+                                <li><strong>Componentes Interdisciplinarios</strong> <span class="citation">[29]</span>
+                                    <ul>
+                                        <li>Recuperación de Información (IR) <span class="citation">[40]</span></li>
+                                        <li>Procesamiento del Lenguaje Natural (PNL) <span class="citation">[53]</span></li>
+                                        <li>Extracción de Información (IE) <span class="citation">[58]</span></li>
+                                        <li>Minería de Datos (DM) <span class="citation">[74]</span></li>
+                                        <li>Aprendizaje Automático (ML) <span class="citation">[226]</span></li>
+                                        <li>Estadística <span class="citation">[34]</span></li>
+                                        <li>Lingüística Computacional <span class="citation">[51]</span></li>
+                                    </ul>
+                                </li>
+                                <li><strong>Aplicaciones Clave</strong> <span class="citation">[22, 55, 208]</span>
+                                    <ul>
+                                        <li>Análisis de Sentimiento <span class="citation">[227]</span></li>
+                                        <li>Clasificación de Documentos (noticias, spam) <span class="citation">[35]</span></li>
+                                        <li>Clustering de Documentos <span class="citation">[192]</span></li>
+                                        <li>Extracción de Entidades Nombradas (NER) <span class="citation">[61]</span></li>
+                                        <li>Traducción Automática <span class="citation">[55]</span></li>
+                                        <li>Resumen Automático <span class="citation">[228]</span></li>
+                                        <li>Sistemas de Preguntas y Respuestas (QA) <span class="citation">[208]</span></li>
+                                        <li>Análisis de Patentes <span class="citation">[229]</span></li>
+                                        <li>Monitoreo de Temas (Topic Detection and Tracking) <span class="citation">[228]</span></li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="glosario">
+            <h2><i class="fas fa-book"></i> Glosario Interactivo de Términos Relevantes</h2>
+            <p>Explore los términos clave de la minería de texto haciendo clic en ellos para ver su definición. Se cerrará cualquier otra definición abierta.</p>
+
+            <div class="glossary-section">
+                <h3>Términos Fundamentales</h3>
+                <p>
+                    <span class="glossary-term">Minería de Texto</span> <span class="citation">[22, 23]</span>
+                    <span class="glossary-definition">Es la extracción no trivial de información útil y previamente desconocida a partir de grandes volúmenes de texto no estructurado.</span>
+                    
+                    <span class="glossary-term">PNL (Procesamiento del Lenguaje Natural)</span> <span class="citation">[48, 53]</span>
+                    <span class="glossary-definition">Campo de la inteligencia artificial que permite a las computadoras procesar, comprender y generar lenguaje humano.</span>
+                    
+                    <span class="glossary-term">Recuperación de Información (IR)</span> <span class="citation">[36, 40]</span>
+                    <span class="glossary-definition">Proceso de localizar y recuperar documentos relevantes a una consulta específica de una gran colección.</span>
+                    
+                    <span class="glossary-term">Extracción de Información (IE)</span> <span class="citation">[58, 59]</span>
+                    <span class="glossary-definition">Tarea de extraer automáticamente información estructurada y específica (entidades, relaciones) de texto no estructurado.</span>
+                    
+                    <span class="glossary-term">Minería de Datos (DM)</span> <span class="citation">[74, 75]</span>
+                    <span class="glossary-definition">Proceso de descubrimiento de patrones en grandes conjuntos de datos estructurados. La minería de texto es un subcampo.</span>
+                </p>
+                <h3>Preprocesamiento y Representación</h3>
+                <p>
+                    <span class="glossary-term">Tokenización</span> <span class="citation">[88, 108]</span>
+                    <span class="glossary-definition">Proceso de dividir el texto en unidades lingüísticas más pequeñas, como palabras o frases.</span>
+                    
+                    <span class="glossary-term">Stop Words</span> <span class="citation">[113, 121]</span>
+                    <span class="glossary-definition">Palabras comunes que se eliminan del texto porque no aportan mucho significado al análisis (ej., 'el', 'un', 'y').</span>
+                    
+                    <span class="glossary-term">Stemming</span> <span class="citation">[111, 114]</span>
+                    <span class="glossary-definition">Reducción de palabras a su raíz morfológica sin asegurar que la raíz sea una palabra válida.</span>
+                    
+                    <span class="glossary-term">Lematización</span> <span class="citation">[92, 129]</span>
+                    <span class="glossary-definition">Reducción de palabras a su forma canónica (lemma), asegurando que sea una palabra válida y con significado.</span>
+                    
+                    <span class="glossary-term">POS Tagging (Etiquetado Gramatical)</span> <span class="citation">[89, 149]</span>
+                    <span class="glossary-definition">Asignación de una categoría gramatical (sustantivo, verbo, adjetivo) a cada palabra en una oración.</span>
+                    
+                    <span class="glossary-term">Bag of Words (BoW)</span> <span class="citation">[160, 171]</span>
+                    <span class="glossary-definition">Representación de un documento como una colección desordenada de palabras, contabilizando su frecuencia o presencia.</span>
+                    
+                    <span class="glossary-term">TF-IDF (Term Frequency-Inverse Document Frequency)</span> <span class="citation">[174, 177]</span>
+                    <span class="glossary-definition">Técnica de ponderación que mide la importancia de un término en un documento en relación con una colección de documentos.</span>
+                    
+                    <span class="glossary-term">Word Embeddings (Incrustaciones de Palabras)</span> <span class="citation">[186, 188]</span>
+                    <span class="glossary-definition">Representación vectorial densa de palabras que captura sus relaciones semánticas.</span>
+                </p>
+                <h3>Análisis de Patrones y Aplicaciones</h3>
+                <p>
+                    <span class="glossary-term">Clustering</span> <span class="citation">[36, 192]</span>
+                    <span class="glossary-definition">Agrupamiento de documentos similares en clusters sin etiquetas predefinidas. Es un aprendizaje no supervisado.</span>
+                    
+                    <span class="glossary-term">Clasificación</span> <span class="citation">[187, 205]</span>
+                    <span class="glossary-definition">Clasificación automática de documentos en categorías predefinidas. Es un aprendizaje supervisado.</span>
+                    
+                    <span class="glossary-term">Análisis de Sentimiento</span> <span class="citation">[227, 230]</span>
+                    <span class="glossary-definition">Proceso de determinar la polaridad emocional (positivo, negativo, neutro) de un texto.</span>
+                    
+                    <span class="glossary-term">Named Entity Recognition (NER)</span> <span class="citation">[61, 231]</span>
+                    <span class="glossary-definition">Identificación automática de nombres de personas, organizaciones, lugares y otras entidades específicas en el texto.</span>
+                </p>
+            </div>
+        </section>
+
+        <section id="conclusiones">
+            <h2><i class="fas fa-check-circle"></i> Conclusiones Claras</h2>
+            <p>La minería de texto se ha establecido como una <mark>disciplina indispensable</mark> para desentrañar el vasto potencial de la información no estructurada presente en el lenguaje natural <span class="citation">[232, 233]</span>. Como hemos explorado, su enfoque multidisciplinario, que integra la informática, la estadística, la lingüística computacional, la recuperación de información, la extracción de información y el aprendizaje automático, le confiere una <mark>gran versatilidad y capacidad</mark> <span class="citation">[12, 29, 30, 33-39]</span>.</p>
+            <p>Las etapas clave del proceso —desde la recolección y el preprocesamiento meticuloso hasta la representación numérica y el análisis de patrones— son <mark>fundamentales para transformar el texto en datos procesables</mark> y, en última instancia, en conocimiento accionable <span class="citation">[36, 79-81, 83-87]</span>. La disponibilidad de herramientas y librerías en Python, como NLTK y Scikit-learn, democratiza estas técnicas, haciéndolas <mark>accesibles para estudiantes y profesionales</mark> <span class="citation">[219, 220]</span>.</p>
+            <p>Las aplicaciones de la minería de texto son diversas y de <mark>gran impacto</mark> en múltiples sectores <span class="citation">[21, 22, 26, 28, 35, 44, 48, 55, 57, 62, 63, 65, 78, 203, 208-210, 227-230, 234-255]</span>. Desde el análisis de sentimiento en redes sociales y la clasificación automática de documentos, hasta la extracción de información en bioinformática y el filtrado de spam, la minería de texto nos permite <mark>tomar decisiones más informadas y comprender mejor el mundo que nos rodea</mark> <span class="citation">[22, 35, 55, 57, 208-210, 227, 230, 244-250, 253]</span>. Su potencial sigue creciendo con los avances en el aprendizaje automático y las incrustaciones de palabras <span class="citation">[161, 186, 188, 189, 256]</span>.</p>
+        </section>
+
+        <section id="bibliografia">
+            <h2><i class="fas fa-book-open"></i> Bibliografía Completa</h2>
+            <p>A continuación, se listan todas las fuentes utilizadas para la elaboración de este material:</p>
+            <ul>
+                <li>[22, 28, 33, 51, 52, 55, 74, 79, 88, 103, 111, 112, 129, 141, 158, 173-175, 199, 208, 257-267]: Excerpts from "09 TextMining (completo).pdf"</li>
+                <li>[11, 12, 29, 34, 40, 53, 58, 59, 75, 89-91, 108, 191, 214, 215, 226, 228, 229, 234, 268-315]: Excerpts from "19-62_HothoNuernbergerPaass1.pdf"</li>
+                <li>[142, 143, 200, 216, 235, 316-341]: Excerpts from "2010.12647v1.pdf"</li>
+                <li>[7, 30, 41, 50, 56, 60, 69, 236-241, 342-355]: Excerpts from "466185-text-mining-an-introduction-to-theory-and-some-applications-.pdf"</li>
+                <li>[130, 144, 159, 176, 223, 242, 356, 357]: Excerpts from "Colab_Notebook_Section_2_completed1_1757339183.pdf" (Primera Mención)</li>
+                <li>[124, 131, 145, 224, 358-360]: Excerpts from "Colab_Notebook_Section_2_completed1_1757339183.pdf" (Segunda Mención)</li>
+                <li>[1, 92, 203, 243, 361-364]: Excerpts from "DEval_Policy_Brief_Text_Mining_2019_EN.pdf"</li>
+                <li>[2, 35, 61, 93, 113, 125, 146, 160, 172, 177, 186, 187, 189, 192, 209, 227, 256, 365-373]: Excerpts from "DM05-Text-Mining.pdf"</li>
+                <li>[13, 20, 54, 57, 161, 188, 193, 374-376]: Excerpts from "DM_CM10.pdf"</li>
+                <li>[14, 23, 36, 42, 43, 80, 81, 94, 114, 190, 212, 377-386]: Excerpts from "L16Text Mining.pdf"</li>
+                <li>[3, 15, 24, 95, 109, 115, 132, 147, 156, 162, 163, 168, 178, 194, 219, 221, 230, 232, 244-246, 387-401]: Excerpts from "Perform Sentiment Analysis on Twitter data by combining Text Mining and NLP techniques, NLTK and Scikit-Learn.pdf" (Primera Mención)</li>
+                <li>[4, 16, 25, 96, 97, 104, 110, 116, 133, 148, 157, 164, 165, 169, 179, 220, 222, 225, 233, 247-250, 402-414]: Excerpts from "Perform Sentiment Analysis on Twitter data by combining Text Mining and NLP techniques, NLTK and Scikit-Learn.pdf" (Segunda Mención)</li>
+                <li>[26, 82]: Excerpts from "Section+1+-+Theory+Deck.pdf"</li>
+                <li>[98, 105]: Excerpts from "Section+2+-+Theory+Deck (1).pdf"</li>
+                <li>[166, 170]: Excerpts from "Section+3+-+Theory+Deck.pdf"</li>
+                <li>[5, 117, 118, 153, 154, 415-453]: Excerpts from "Text Mining with R_ A Tidy Approach ( PDFDrive ).pdf"</li>
+                <li>[6, 8, 17, 27, 31, 37, 38, 44-46, 62-64, 70-72, 83, 84, 106, 119, 120, 126-128, 135, 136, 149-152, 167, 180, 195, 196, 201, 202, 204-207, 210, 213, 217, 218, 231, 251, 454-611]: Excerpts from "Text Mining_ Predictive Methods for Analyzing Unstructured Information ( PDFDrive ).pdf"</li>
+                <li>[18, 21, 47, 48, 99, 100, 121, 122, 134, 171, 181, 182, 252, 253, 612-627]: Excerpts from "Unit-12.pdf"</li>
+                <li>[101, 628-630]: Excerpts from "ifcb50_09.pdf"</li>
+                <li>[39, 65, 76, 102, 197, 198, 631-637]: Excerpts from "part06-text-mining-ml.pdf"</li>
+                <li>[9, 19, 32, 49, 66, 73, 77, 78, 85, 86, 107, 211, 638-646]: Excerpts from "text-mining-concepts-process-and-applications-36-39.pdf"</li>
+                <li>[10, 67, 68, 87, 123, 155, 183-185, 254, 255, 647-671]: Excerpts from "text-mining-methodologies.pdf"</li>
+                <li>[137, 138, 672-674]: Excerpts from "vertopal.com_Colab_Notebook (1).pdf" (Múltiples menciones, con la misma sección)</li>
+                <li>[139, 140, 675-678]: Excerpts from "vertopal.com_Colab_Notebook_Section_1_completed.pdf" (Múltiples menciones, con la misma sección)</li>
+            </ul>
+        </section>
+
+        <section id="extras">
+            <h2><i class="fas fa-magic"></i> Extras Opcionales</h2>
+            <p>Estas secciones adicionales enriquecerían el aplicativo con elementos visuales e interactivos más avanzados, fomentando un aprendizaje más dinámico y profundo.</p>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-history"></i> Línea de Tiempo Interactiva: Evolución de la Minería de Texto</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Una línea de tiempo interactiva podría mostrar los hitos clave y la evolución de la minería de texto y sus campos relacionados. Aquí un ejemplo simplificado de su estructura. La interactividad (puntos clicables para detalles, filtros por década, animaciones) se lograría con JavaScript más complejo.</p>
+                    <ul class="timeline">
+                        <li class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="timeline-date">1950s-1960s</div>
+                                <h4>Primeros trabajos en Recuperación de Información (IR)</h4>
+                                <p>Investigación temprana en clasificación e indexación de documentos <span class="citation">[38, 599]</span>. Conceptos como 'Bag of Words' y el modelo de espacio vectorial comienzan a surgir <span class="citation">[38, 604]</span>. Se sientan las bases de la IR moderna <span class="citation">[40]</span>.</p>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="timeline-date">1980s</div>
+                                <h4>Avances en PNL e IA y minería de texto manual</h4>
+                                <p>Aplicación de métodos de inteligencia artificial a la categorización de texto. La minería de texto manual se empieza a usar, pero es costosa y lenta <span class="citation">[38, 464, 639]</span>. Surgen sistemas de gramática y análisis sintáctico <span class="citation">[51]</span>.</p>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="timeline-date">Década de 1990</div>
+                                <h4>Explosión de Datos Digitales e Impulso de Conferencias</h4>
+                                <p>Disponibilidad masiva de texto digital y aumento de la capacidad computacional. Surgen conferencias como MUC (Message Understanding Conference) y TREC (Text Retrieval Conference), impulsando la investigación y evaluación en Extracción de Información (IE) y Recuperación de Información (IR) <span class="citation">[128, 231, 464, 539, 576, 598, 605]</span>. Se populariza el stemming como el algoritmo de Porter <span class="citation">[128]</span>.</p>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="timeline-date">Principios de 2000</div>
+                                <h4>Popularización de Algoritmos y Aplicaciones</h4>
+                                <p>Sistemas como PageRank de Google demuestran el poder del análisis de enlaces en IR <span class="citation">[506, 512]</span>. Desarrollo de algoritmos de clustering como K-means y EM para texto <span class="citation">[199, 201]</span>. Consolidación de PNL en aplicaciones prácticas como filtrado de spam y clasificación de noticias <span class="citation">[210, 561]</span>.</p>
+                            </div>
+                        </li>
+                        <li class="timeline-item">
+                            <div class="timeline-content">
+                                <div class="timeline-date">2010s en adelante</div>
+                                <h4>Deep Learning y Word Embeddings</h4>
+                                <p>Avances significativos en PNL con el aprendizaje profundo. Introducción de Word Embeddings (ej. Word2Vec, GloVe, BERT) que revolucionan la representación semántica de palabras y el manejo de lenguajes complejos, mejorando la comprensión de sinónimos y relaciones <span class="citation">[161, 186, 188, 189, 256]</span>. Aumento de aplicaciones en análisis de sentimiento y asistentes conversacionales <span class="citation">[230, 242]</span>.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-chart-pie"></i> Infografías Interactivas</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Las infografías visualizan conceptos complejos de forma concisa. Implementar estas infografías de manera interactiva requeriría SVG o canvas para gráficos complejos, y JavaScript para la interactividad (tooltips, filtros, animaciones). Aquí se describen conceptualmente:</p>
+                    <ul>
+                        <li><strong>Flujo del Proceso de Minería de Texto:</strong> Una representación visual del ciclo completo, desde la recolección de documentos hasta la evaluación e interpretación, destacando las interconexiones y el carácter iterativo del proceso <span class="citation">[36, 80-82, 85, 86]</span>.</li>
+                        <li><strong>Mapa de Aplicaciones de Text Mining:</strong> Un diagrama que muestre cómo las diferentes técnicas se aplican a problemas específicos (ej., Análisis de Sentimiento para reseñas de productos, NER para documentos legales, Clustering para organizar colecciones de documentos) <span class="citation">[22, 35, 55, 208, 227]</span>.</li>
+                        <li><strong>Comparación de BoW vs. TF-IDF vs. Embeddings:</strong> Una tabla o gráfico comparativo de las ventajas, desventajas y casos de uso óptimos para cada método de representación textual.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <div class="accordion-header">
+                    <h3><i class="fas fa-question-circle"></i> Ejercicios Prácticos y Preguntas Interactivas</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <p>Una sección de ejercicios con retroalimentación inmediata ayudaría a solidificar el aprendizaje de los estudiantes. La interactividad se lograría con JavaScript para validar respuestas, dar retroalimentación instantánea y llevar un seguimiento del progreso.</p>
+                    <ul>
+                        <li><strong>Preguntas de Opción Múltiple:</strong> Sobre definiciones de términos clave, la secuencia correcta de las etapas del proceso o la identificación de aplicaciones.
+                            <br><em>Ejemplo: ¿Cuál de las siguientes técnicas reduce las palabras a su forma base válida y con significado?
+                                <ol type="a">
+                                    <li>Stemming</li>
+                                    <li>Tokenización</li>
+                                    <li>Lematización</li>
+                                    <li>Eliminación de Stop Words</li>
+                                </ol>
+                                (Respuesta correcta: c)</em>
+                        </li>
+                        <li><strong>Rellenar Espacios en Blanco:</strong> Pequeños textos con huecos para completar con el término correcto.
+                            <br><em>Ejemplo: La _________ es el proceso de dividir un texto en unidades más pequeñas llamadas tokens. (Respuesta: Tokenización)</em>
+                        </li>
+                        <li><strong>Mini-Desafíos de Código:</strong> Ejercicios sencillos para aplicar los fragmentos de código Python vistos, por ejemplo, tokenizar una nueva frase o aplicar stemming a una lista de palabras.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <footer id="footer">
+            <p>&copy; 2023 Aplicativo de Minería de Texto. Creado por un experto en minería de texto y diseño instruccional.</p>
+            <p>Para más información, consulte las fuentes citadas.</p>
+        </footer>
+    </div>
+
+    <script>
+        // JavaScript para funcionalidad de acordeones
+        document.querySelectorAll('.accordion-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const accordionItem = header.closest('.accordion-item');
+                accordionItem.classList.toggle('active');
+            });
+        });
+
+        // JavaScript para funcionalidad de pestañas
+        function openTab(evt, tabName) {
+            var i, tabContent, tabButtons;
+
+            tabContent = document.getElementsByClassName("tab-content");
+            for (i = 0; i < tabContent.length; i++) {
+                tabContent[i].style.display = "none";
+            }
+
+            tabButtons = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tabButtons.length; i++) {
+                tabButtons[i].className = tabButtons[i].className.replace(" active", "");
+            }
+
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        // JavaScript para glosario interactivo
+        document.querySelectorAll('.glossary-term').forEach(term => {
+            term.addEventListener('click', () => {
+                const definition = term.nextElementSibling; 
+                const citation = definition.nextElementSibling; // Asumiendo que la citación sigue a la definición
+
+                // Ocultar todas las definiciones abiertas
+                document.querySelectorAll('.glossary-definition').forEach(def => {
+                    def.style.display = 'none';
+                    if (def.nextElementSibling && def.nextElementSibling.classList.contains('citation')) {
+                        def.nextElementSibling.style.display = 'none';
+                    }
+                });
+
+                // Mostrar/ocultar la definición y citación asociadas al término clickeado
+                if (definition && definition.classList.contains('glossary-definition')) {
+                    if (definition.style.display === 'block') {
+                        definition.style.display = 'none';
+                        if (citation && citation.classList.contains('citation')) {
+                            citation.style.display = 'none';
+                        }
+                    } else {
+                        definition.style.display = 'block';
+                        if (citation && citation.classList.contains('citation')) {
+                            citation.style.display = 'inline'; // O 'block' dependiendo del diseño
+                        }
+                    }
+                }
+            });
+        });
+
+
+        // Asegurarse de que el primer tab esté activo al cargar la página
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelector('.tab-buttons .tab-button').click();
+        });
+    </script>
+</body>
+</html>
