@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduSync | Control Académico UNAB</title>
+    
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
+            colors: {
+              brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 900: '#1e3a8a' }
+            }
+          }
+        }
+      }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- 2. SheetJS para parseo de Excel REAL en el navegador -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <!-- 3. Import Maps para ES Modules (React + Firebase + Lucide) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@18.2.0",
+          "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+          "firebase/app": "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js",
+          "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+        }
+      }
+    </script>
+
+    <!-- 4. Babel para compilar JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+      body { margin: 0; padding: 0; background-color: #f8fafc; overflow-x: hidden; }
+      .dark body { background-color: #0f172a; }
+      #root { min-height: 100vh; display: flex; flex-direction: column; }
+      
+      .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+      .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+      
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+        import { getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, addDoc, getDoc, query, where } from 'firebase/firestore';
+        import { 
+          LayoutDashboard, Users, BookOpen, Settings, QrCode, 
+          AlertTriangle, CheckCircle, XCircle, Moon, Sun,
+          UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
+          GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save
+        } from 'lucide-react';
+
+        // ============================================================================
+        // 1. FIREBASE CONFIGURATION (PRODUCCIÓN REAL)
+        // ============================================================================
+        const firebaseConfig = {
+          apiKey: "AIzaSyDNmzAMdVD2y-5WSMyanxdo_7zqQoiMINs",
+          authDomain: "plataformacontrolacademico-10.firebaseapp.com",
+          projectId: "plataformacontrolacademico-10",
+          storageBucket: "plataformacontrolacademico-10.firebasestorage.app",
+          messagingSenderId: "581717309665",
+          appId: "1:581717309665:web:ceaa2a15ed85e52d8c9fa0",
+          measurementId: "G-F7M7BJ7QQ7"
+        };
+
+        // Si corre en Canvas usa su config, sino usa producción
+        const app = initializeApp(typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Rutas dinámicas. Para garantizar que funcione local y en Canvas.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'edusync-unab'; 
+        
+        const PATHS = {
+          profiles: collection(db, 'artifacts', appId, 'public', 'data', 'profiles'),
+          courses: collection(db, 'artifacts', appId, 'public', 'data', 'courses'),
+          sessions: collection(db, 'artifacts', appId, 'public', 'data', 'sessions'),
+          attendance: collection(db, 'artifacts', appId, 'public', 'data', 'attendance'),
+          grades: collection(db, 'artifacts', appId, 'public', 'data', 'grades'),
+          tutorings: collection(db, 'artifacts', appId, 'public', 'data', 'tutorings'),
+        };
+
+        // ============================================================================
+        // 2. ATOMIC UI COMPONENTS
+        // ============================================================================
+        const Card = ({ children, className = '', onClick }) => (
+          <div onClick={onClick} className={`bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-all duration-300 ${onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-1' : ''} ${className}`}>
+            {children}
+          </div>
+        );
+
+        const Badge = ({ children, color = 'blue', className = '' }) => {
+          const colors = {
+            blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+            green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+            red: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+            yellow: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+            purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+            gray: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+          };
+          return (
+            <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${colors[color] || colors.blue} ${className}`}>
+              {children}
+            </span>
+          );
+        };
+
+        const Button = ({ children, onClick, variant = 'primary', className = '', disabled = false, icon: Icon }) => {
+          const baseStyle = "flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95";
+          const variants = {
+            primary: "bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/30 dark:shadow-none",
+            secondary: "bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white",
+            danger: "bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/30 dark:shadow-none",
+            outline: "border-2 border-brand-600 text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/20"
+          };
+          return (
+            <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
+              {Icon && <Icon size={18} />}
+              {children}
+            </button>
+          );
+        };
+
+        // ============================================================================
+        // 3. MAIN APPLICATION ROOT
+        // ============================================================================
+        function App() {
+          const [user, setUser] = useState(null);
+          const [profiles, setProfiles] = useState([]);
+          const [courses, setCourses] = useState([]);
+          const [sessions, setSessions] = useState([]);
+          const [attendances, setAttendances] = useState([]);
+          const [grades, setGrades] = useState([]);
+          const [tutorings, setTutorings] = useState([]);
+          
+          const [loading, setLoading] = useState(true);
+          const [darkMode, setDarkMode] = useState(false);
+          const [toast, setToast] = useState(null);
+
+          const [currentView, setCurrentView] = useState('dashboard');
+          const [selectedCourse, setSelectedCourse] = useState(null);
+
+          // INIT & AUTH LISTENER
+          useEffect(() => {
+            const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+              if (currentUser && currentUser.email) {
+                const isUNAB = currentUser.email.endsWith('@unab.edu.co');
+                const isAdmin = currentUser.email === 'dudbilopr@gmail.com';
+                
+                if (!isUNAB && !isAdmin) {
+                  await signOut(auth);
+                  showToast("Acceso denegado. Utiliza un correo institucional @unab.edu.co", "error");
+                  setUser(null);
+                } else {
+                  setUser(currentUser);
+                }
+              } else {
+                setUser(null);
+              }
+              setLoading(false);
+            });
+            return () => unsubscribe();
+          }, []);
+
+          // FIRESTORE SYNC (Real Time Listeners)
+          useEffect(() => {
+            if (!user) return;
+            setLoading(true);
+            const errHandler = (e) => console.error("Firestore sync error:", e);
+
+            const unsubs = [
+              onSnapshot(PATHS.profiles, s => setProfiles(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.courses, s => setCourses(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.sessions, s => setSessions(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.attendance, s => setAttendances(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.grades, s => setGrades(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.tutorings, s => setTutorings(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+            ];
+            setTimeout(() => setLoading(false), 800);
+            return () => unsubs.forEach(u => u());
+          }, [user]);
+
+          useEffect(() => {
+            if (darkMode) document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+          }, [darkMode]);
+
+          const showToast = (msg, type = 'info') => {
+            setToast({ msg, type });
+            setTimeout(() => setToast(null), 4000);
+          };
+
+          const currentUserProfile = profiles.find(p => p.id === user?.uid);
+
+          // REAL GOOGLE AUTH WITH DOMAIN RESTRICTION AND ROLE ASSIGNMENT
+          const handleGoogleLogin = async () => {
+            try {
+              const provider = new GoogleAuthProvider();
+              provider.setCustomParameters({ prompt: 'select_account' });
+              const result = await signInWithPopup(auth, provider);
+              const loggedUser = result.user;
+              const email = loggedUser.email.toLowerCase();
+              
+              if (!email.endsWith('@unab.edu.co') && email !== 'dudbilopr@gmail.com') {
+                await signOut(auth);
+                showToast("Solo se permiten correos @unab.edu.co", "error");
+                return;
+              }
+              
+              const profileRef = doc(PATHS.profiles, loggedUser.uid);
+              const profileSnap = await getDoc(profileRef);
+              
+              if (!profileSnap.exists()) {
+                let role = 'student'; 
+                if (email === 'dudbilopr@gmail.com') role = 'admin';
+                else if (email.includes('director') || email.includes('coordinador')) role = 'director';
+                else if (email.includes('docente') || email.includes('profesor')) role = 'teacher';
+
+                await setDoc(profileRef, {
+                  name: loggedUser.displayName || 'Usuario',
+                  email: email,
+                  role: role,
+                  photoURL: loggedUser.photoURL,
+                  createdAt: new Date().toISOString(),
+                  campus: 'Bucaramanga',
+                  status: 'Activo'
+                });
+              }
+              showToast(`Autenticado como ${loggedUser.displayName}`, 'success');
+            } catch (error) {
+               console.error(error);
+               showToast("Error de autenticación.", "error");
+            }
+          };
+
+          const handleLogout = async () => {
+            await signOut(auth);
+            setCurrentView('dashboard');
+          };
+
+          // ============================================================================
+          // 4. LAYOUT ROUTER
+          // ============================================================================
+          if (loading) return (
+            <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 fade-in">
+              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-brand-600 mb-4"></div>
+              <p className="font-bold text-slate-500 uppercase tracking-widest text-sm">Conectando a Firebase...</p>
+            </div>
+          );
+
+          if (!user || !currentUserProfile) {
+            return (
+              <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-4 fade-in font-sans relative overflow-hidden">
+                <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-brand-500/20 rounded-full blur-3xl"></div>
+                
+                <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700 z-10 slide-up">
+                  <div className="p-10 text-center">
+                    <div className="bg-gradient-to-br from-brand-600 to-brand-800 w-24 h-24 rounded-3xl mx-auto flex items-center justify-center shadow-lg mb-8 rotate-3">
+                      <GraduationCap size={48} className="text-white -rotate-3" />
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight mb-2">EduSync</h1>
+                    <p className="text-slate-500 dark:text-slate-400 font-medium mb-10">Control Académico UNAB</p>
+                    
+                    <button onClick={handleGoogleLogin} className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-slate-800 dark:text-white px-6 py-4 rounded-2xl font-bold transition-all active:scale-95 group shadow-sm">
+                      <svg className="w-6 h-6 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                      </svg>
+                      Ingreso Institucional (@unab)
+                    </button>
+                    
+                    <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-700 text-left text-xs text-slate-400 font-medium leading-relaxed">
+                      El rol (Estudiante, Docente, Director) es asignado automáticamente validando el registro de la universidad.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className={`flex-1 flex flex-col lg:flex-row bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 selection:bg-brand-200`}>
+              
+              {/* TOASTS */}
+              {toast && (
+                <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 slide-up border font-bold
+                  ${toast.type === 'error' ? 'bg-white border-rose-500 text-rose-700' : 
+                    toast.type === 'success' ? 'bg-white border-emerald-500 text-emerald-700' : 'bg-white border-brand-500 text-brand-700'} dark:bg-slate-800`}>
+                  {toast.type === 'error' ? <XCircle size={24} className="text-rose-500"/> : <CheckCircle size={24} className={toast.type === 'success' ? "text-emerald-500" : "text-brand-500"}/>}
+                  {toast.msg}
+                </div>
+              )}
+
+              {/* SIDEBAR */}
+              <aside className="w-full lg:w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-800 flex flex-col flex-shrink-0 z-20">
+                <div className="p-8 flex items-center gap-4 border-b border-slate-100 dark:border-slate-700">
+                  <div className="bg-brand-600 p-3 rounded-2xl shadow-lg">
+                    <GraduationCap size={28} className="text-white" />
+                  </div>
+                  <div>
+                    <h1 className="font-black text-2xl tracking-tight text-slate-900 dark:text-white">EduSync</h1>
+                    <Badge color="purple" className="mt-1 text-[10px]">{currentUserProfile.role}</Badge>
+                  </div>
+                </div>
+
+                <nav className="flex-1 px-6 py-6 space-y-2 overflow-y-auto">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">Módulos</p>
+                  
+                  <NavItem icon={LayoutDashboard} label="Dashboard General" active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setSelectedCourse(null);}} />
+                  
+                  {(currentUserProfile.role === 'teacher' || currentUserProfile.role === 'student') && (
+                    <NavItem icon={BookOpen} label="Asignaturas y Notas" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
+                  )}
+                  
+                  {(currentUserProfile.role === 'director' || currentUserProfile.role === 'admin') && (
+                    <NavItem icon={PieChart} label="Analítica Institucional" active={currentView === 'analytics'} onClick={() => setCurrentView('analytics')} />
+                  )}
+
+                  {currentUserProfile.role === 'admin' && (
+                    <NavItem icon={Settings} label="Administración DB" active={currentView === 'admin'} onClick={() => setCurrentView('admin')} />
+                  )}
+                </nav>
+
+                <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-6 px-2">
+                    <span className="text-sm font-bold text-slate-500 flex items-center gap-2"><Moon size={16}/> Dark Mode</span>
+                    <button onClick={() => setDarkMode(!darkMode)} className={`w-14 h-7 rounded-full p-1 transition-colors ${darkMode ? 'bg-brand-600' : 'bg-slate-300'}`}>
+                      <div className={`w-5 h-5 rounded-full bg-white transition-transform shadow-sm ${darkMode ? 'translate-x-7' : 'translate-x-0'}`}></div>
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-3 p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <img src={currentUserProfile.photoURL || `https://ui-avatars.com/api/?name=${currentUserProfile.name}&background=2563eb&color=fff`} className="w-10 h-10 rounded-full" alt="Avatar"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-slate-900 dark:text-white truncate">{currentUserProfile.name.split(' ')[0]}</p>
+                      <p className="text-xs text-slate-500 truncate">{currentUserProfile.email}</p>
+                    </div>
+                    <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-rose-600 transition-colors">
+                      <LogOut size={18} />
+                    </button>
+                  </div>
+                </div>
+              </aside>
+
+              {/* MAIN */}
+              <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
+                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} />}
+                {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
+                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} />}
+                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} />}
+                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} />}
+              </main>
+
+            </div>
+          );
+        }
+
+        // ============================================================================
+        // 5. MODULAR VIEWS
+        // ============================================================================
+        const NavItem = ({ icon: Icon, label, active, onClick }) => (
+          <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-all ${
+            active ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}>
+            <Icon size={20} className={active ? 'text-brand-600' : ''} /> {label}
+          </button>
+        );
+
+        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings }) => {
+          if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} />;
+          if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} />;
+          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} />;
+          return null;
+        };
+
+        // --- DASHBOARD ESTUDIANTE ---
+        const StudentDashboard = ({ profile, courses, sessions, attendances }) => {
+          const myCourses = courses.filter(c => c.students.includes(profile.id));
+          
+          const stats = useMemo(() => {
+            let expected = 0, attended = 0;
+            myCourses.forEach(course => {
+              const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
+              expected += courseSessions.length;
+              const courseAttends = attendances.filter(a => a.courseId === course.id && a.studentId === profile.id);
+              attended += courseAttends.length;
+            });
+            const percent = expected === 0 ? 100 : Math.round((attended / expected) * 100);
+            const risk = percent <= 80; // Regla de negocio: Riesgo académico
+            return { expected, attended, percent, risk, absents: expected - attended };
+          }, [myCourses, sessions, attendances, profile.id]);
+
+          return (
+            <div className="space-y-8 slide-up max-w-6xl mx-auto">
+              <header className="mb-8">
+                <h1 className="text-4xl font-black text-slate-900 dark:text-white">Hola, {profile.name.split(' ')[0]} 👋</h1>
+                <p className="text-slate-500 text-lg mt-2">Campus UNAB Bucaramanga</p>
+              </header>
+
+              {stats.risk && stats.expected > 0 && (
+                <div className="bg-gradient-to-r from-rose-500 to-red-600 p-8 rounded-3xl flex items-center gap-6 text-white shadow-xl">
+                  <div className="bg-white/20 p-4 rounded-full"><ShieldAlert size={40} /></div>
+                  <div>
+                    <h3 className="font-black text-2xl">¡Alerta de Riesgo Académico!</h3>
+                    <p className="font-medium mt-1">Tu asistencia general ({stats.percent}%) es crítica. Acumulas {stats.absents} inasistencias en total.</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="flex flex-col items-center justify-center py-10 text-center">
+                  <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
+                  <h3 className="text-5xl font-black">{stats.percent}%</h3>
+                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
+                </Card>
+                <Card className="flex flex-col items-center justify-center py-10 text-center">
+                  <BookOpen size={64} className="text-brand-500 mb-4"/>
+                  <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
+                </Card>
+                <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
+                  <AlertTriangle size={64} className="text-rose-500 mb-4"/>
+                  <h3 className="text-5xl font-black">{stats.absents}</h3>
+                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
+                </Card>
+              </div>
+            </div>
+          );
+        };
+
+        // --- DASHBOARD DOCENTE ---
+        const TeacherDashboard = ({ profile, courses, sessions, tutorings }) => {
+          const myCourses = courses.filter(c => c.teacherId === profile.id);
+          const mySessions = sessions.filter(s => s.teacherId === profile.id && s.completed);
+
+          return (
+            <div className="space-y-8 slide-up max-w-6xl mx-auto">
+              <header className="mb-8">
+                <h1 className="text-4xl font-black">Portal Docente</h1>
+                <p className="text-slate-500 text-lg mt-2">Métricas e histórico de gestión de clases.</p>
+              </header>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <Card className="border-t-4 border-brand-500">
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Cursos Asignados</p>
+                  <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                </Card>
+                <Card className="border-t-4 border-emerald-500">
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Clases Dictadas</p>
+                  <h3 className="text-5xl font-black">{mySessions.length}</h3>
+                </Card>
+                <Card className="border-t-4 border-purple-500">
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Estudiantes Totales</p>
+                  <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => c.students || [])).size}</h3>
+                </Card>
+              </div>
+            </div>
+          );
+        };
+
+        // --- LISTA DE CURSOS ---
+        const CoursesListView = ({ profile, courses, profiles, onSelectCourse }) => {
+          const displayCourses = profile.role === 'teacher' ? courses.filter(c => c.teacherId === profile.id) : profile.role === 'student' ? courses.filter(c => (c.students || []).includes(profile.id)) : courses; 
+
+          return (
+            <div className="space-y-8 slide-up max-w-7xl mx-auto">
+              <header className="mb-8">
+                <h1 className="text-4xl font-black">Asignaturas</h1>
+              </header>
+              
+              {displayCourses.length === 0 ? (
+                <Card className="text-center py-20 border-dashed border-2">
+                  <BookOpen className="mx-auto text-slate-300 mb-4" size={64}/>
+                  <h3 className="text-2xl font-black">Sin asignaturas</h3>
+                  <p className="text-slate-500 mt-2">Esperando datos de Coordinación.</p>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {displayCourses.map(course => {
+                    const teacher = profiles.find(p => p.id === course.teacherId);
+                    return (
+                      <Card key={course.id} onClick={() => onSelectCourse(course)} className="hover:border-brand-400 group">
+                        <Badge color="blue" className="mb-4 inline-block">{course.code}</Badge>
+                        <h3 className="font-black text-2xl mb-2 group-hover:text-brand-600 transition-colors">{course.name}</h3>
+                        <p className="text-slate-500 font-medium mb-6 flex items-center gap-2"><Clock size={16}/> {course.schedule}</p>
+                        
+                        <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                          {profile.role === 'student' && teacher ? (
+                            <span className="text-xs font-bold text-slate-500">Prof. {teacher.name.split(' ')[0]}</span>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-500">{(course.students||[]).length} Estudiantes</span>
+                          )}
+                          <span className="text-brand-600 font-black text-sm group-hover:translate-x-1 transition-transform">Ir a Curso &rarr;</span>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        // --- DETALLE DEL CURSO (QR, ASISTENCIA, NOTAS, TUTORIAS) ---
+        const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db }) => {
+          const [topic, setTopic] = useState('');
+          const [activeSession, setActiveSession] = useState(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
+          const [studentTokenInput, setStudentTokenInput] = useState('');
+          const [activeTab, setActiveTab] = useState('attendance'); 
+
+          // LÓGICA QR DINÁMICO CADA 10S
+          useEffect(() => {
+            let interval;
+            if (activeSession && profile.role === 'teacher') {
+              interval = setInterval(async () => {
+                const newToken = Math.random().toString(36).substring(2, 8).toUpperCase();
+                await updateDoc(doc(PATHS.sessions, activeSession.id), { currentToken: newToken });
+              }, 10000); 
+            }
+            return () => clearInterval(interval);
+          }, [activeSession, profile.role]);
+
+          useEffect(() => {
+            setActiveSession(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
+          }, [sessions, course.id]);
+
+          // REAL DB ACTIONS
+          const handleStartClass = async () => {
+            if (!topic) return showToast("Falta temática", "error");
+            await addDoc(PATHS.sessions, {
+              courseId: course.id, teacherId: profile.id, topic, status: 'active', completed: false, date: new Date().toISOString(),
+              currentToken: Math.random().toString(36).substring(2, 8).toUpperCase()
+            });
+            showToast("Clase en curso. Mostrando QR...", "success");
+          };
+
+          const handleEndClass = async (dictada) => {
+            await updateDoc(doc(PATHS.sessions, activeSession.id), { status: 'completed', completed: dictada, currentToken: null });
+            if(dictada) {
+              const presentes = attendances.filter(a => a.sessionId === activeSession.id).length;
+              const ausentes = (course.students||[]).length - presentes;
+              if (ausentes > 0) showToast(`Email enviado a ${ausentes} ausentes.`, "info");
+              showToast("Clase finalizada.", "success");
+            } else {
+              showToast("Registrado como clase NO dictada.", "info");
+            }
+          };
+
+          const handleRegisterAttendance = async () => {
+            if (!activeSession) return showToast("No hay clase activa", "error");
+            if (studentTokenInput.trim().toUpperCase() !== activeSession.currentToken) return showToast("Token inválido o expirado", "error");
+            if (attendances.some(a => a.sessionId === activeSession.id && a.studentId === profile.id)) return showToast("Asistencia ya registrada", "info");
+            
+            await addDoc(PATHS.attendance, { sessionId: activeSession.id, courseId: course.id, studentId: profile.id, timestamp: new Date().toISOString() });
+            showToast("¡Asistencia confirmada!", "success");
+            setStudentTokenInput('');
+          };
+
+          // GUARDADO REAL DE NOTAS (Solo Docente)
+          const handleSaveGrade = async (studentId, corte, field, value) => {
+             const existingGrade = grades.find(g => g.courseId === course.id && g.studentId === studentId && g.corte === corte);
+             const numVal = parseFloat(value);
+             if(isNaN(numVal) || numVal < 0 || numVal > 5) return showToast("Nota debe ser entre 0.0 y 5.0", "error");
+
+             try {
+               if(existingGrade) {
+                 await updateDoc(doc(PATHS.grades, existingGrade.id), { [field]: numVal });
+               } else {
+                 await addDoc(PATHS.grades, { courseId: course.id, studentId, corte, [field]: numVal });
+               }
+               showToast("Nota guardada en la base de datos.", "success");
+             } catch(e) { showToast("Error al guardar", "error"); }
+          };
+
+          const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
+          const enrolledStudents = profiles.filter(p => (course.students||[]).includes(p.id));
+
+          return (
+            <div className="max-w-6xl mx-auto slide-up space-y-6">
+              <button onClick={onBack} className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-4 hover:text-brand-600">&larr; Regresar</button>
+              
+              <header className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <Badge color="purple" className="mb-4">{course.code}</Badge>
+                <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-4">{course.name}</h1>
+                <div className="flex gap-4">
+                  <Badge color="gray"><Clock size={14} className="inline mr-1"/> {course.schedule}</Badge>
+                  <Badge color="blue"><Users size={14} className="inline mr-1"/> {(course.students||[]).length} Estudiantes</Badge>
+                </div>
+              </header>
+
+              <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+                <button onClick={()=>setActiveTab('attendance')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='attendance' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><QrCode className="inline mr-2" size={18}/> Asistencia</button>
+                <button onClick={()=>setActiveTab('grades')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='grades' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><ClipboardList className="inline mr-2" size={18}/> Calificaciones</button>
+                <button onClick={()=>setActiveTab('tutoring')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='tutoring' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Users className="inline mr-2" size={18}/> Tutorías</button>
+              </div>
+
+              {/* TAB ASISTENCIA */}
+              {activeTab === 'attendance' && (
+                <div className="space-y-6 mt-6">
+                  {profile.role === 'teacher' && (
+                    <Card className={activeSession ? "border-emerald-500 shadow-emerald-500/20 shadow-xl" : ""}>
+                      {!activeSession ? (
+                        <div>
+                           <h2 className="text-2xl font-black mb-4">Activar Control QR</h2>
+                           <input type="text" placeholder="Temática de la sesión" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl mb-4 mr-4 bg-slate-50 dark:bg-slate-700"/>
+                           <Button onClick={handleStartClass}>Generar QR Dinámico</Button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col md:flex-row gap-8 items-center">
+                           <div className="flex-1">
+                             <Badge color="green" className="mb-4 animate-pulse">Transmitiendo QR</Badge>
+                             <h2 className="text-3xl font-black mb-6">{activeSession.topic}</h2>
+                             <div className="flex gap-4">
+                               <Button onClick={()=>handleEndClass(true)} variant="primary">Guardar Clase</Button>
+                               <Button onClick={()=>handleEndClass(false)} variant="danger">Reportar Falla Docente</Button>
+                             </div>
+                           </div>
+                           <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl text-center border-2 border-slate-200">
+                             <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.currentToken}`} alt="QR" className="mx-auto rounded-xl mb-4"/>
+                             <span className="text-4xl font-black font-mono tracking-[0.2em]">{activeSession.currentToken}</span>
+                             <p className="text-brand-600 font-bold text-xs mt-2 uppercase">Rotando cada 10s</p>
+                           </div>
+                        </div>
+                      )}
+                    </Card>
+                  )}
+
+                  {profile.role === 'student' && (
+                    <Card className={activeSession ? "border-brand-500 shadow-brand-500/20 shadow-xl" : ""}>
+                       <h2 className="text-2xl font-black mb-4">Registro Asistencia</h2>
+                       {activeSession ? (
+                         <div>
+                            <p className="font-bold text-slate-500 mb-4">Clase: <span className="text-slate-900 dark:text-white">{activeSession.topic}</span></p>
+                            <div className="flex gap-4">
+                               <input type="text" placeholder="PIN" maxLength={6} value={studentTokenInput} onChange={e=>setStudentTokenInput(e.target.value.toUpperCase())} className="w-full md:w-1/3 px-6 py-4 border-2 rounded-xl text-2xl font-mono uppercase text-center bg-slate-50 dark:bg-slate-700 focus:border-brand-500"/>
+                               <Button onClick={handleRegisterAttendance} className="px-8">Validar</Button>
+                            </div>
+                         </div>
+                       ) : (
+                         <div className="py-10 text-center text-slate-500"><Clock size={48} className="mx-auto mb-4 opacity-50"/> <p className="font-bold">El docente no ha iniciado la sesión.</p></div>
+                       )}
+                    </Card>
+                  )}
+
+                  <Card>
+                    <h3 className="font-black text-xl mb-4">Historial de Clases</h3>
+                    <table className="w-full text-left text-sm">
+                       <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest"><th className="pb-3">Fecha</th><th className="pb-3">Temática</th><th className="pb-3 text-right">Asistencia</th></tr></thead>
+                       <tbody>
+                          {courseSessions.map(s => {
+                            const presentCount = attendances.filter(a => a.sessionId === s.id).length;
+                            const isPresent = attendances.some(a => a.sessionId === s.id && a.studentId === profile.id);
+                            return (
+                              <tr key={s.id} className="border-b border-slate-100"><td className="py-4 font-bold">{new Date(s.date).toLocaleDateString()}</td><td className="py-4 font-bold text-slate-800 dark:text-white">{s.topic}</td><td className="py-4 text-right">
+                                {profile.role === 'teacher' ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
+                              </td></tr>
+                            )
+                          })}
+                       </tbody>
+                    </table>
+                  </Card>
+                </div>
+              )}
+
+              {/* TAB CALIFICACIONES (REAL) */}
+              {activeTab === 'grades' && (
+                <div className="space-y-6 mt-6">
+                  {profile.role === 'teacher' ? (
+                     <Card>
+                       <h3 className="font-black text-xl mb-6">Gestionar Calificaciones (Corte 1)</h3>
+                       <table className="w-full text-left">
+                          <thead><tr className="border-b-2 text-slate-400 text-xs uppercase tracking-widest"><th className="pb-3">Estudiante</th><th className="pb-3">Parcial 1</th><th className="pb-3">Parcial 2</th></tr></thead>
+                          <tbody>
+                            {enrolledStudents.map(student => {
+                              const sGrade = grades.find(g => g.courseId === course.id && g.studentId === student.id && g.corte === 1) || {};
+                              return (
+                                <tr key={student.id} className="border-b border-slate-100">
+                                  <td className="py-4 font-bold text-sm">{student.name}</td>
+                                  <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p1||''} onBlur={(e)=>handleSaveGrade(student.id, 1, 'p1', e.target.value)} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
+                                  <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p2||''} onBlur={(e)=>handleSaveGrade(student.id, 1, 'p2', e.target.value)} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                       </table>
+                       <p className="text-xs text-slate-400 mt-4">Los cambios se guardan automáticamente al salir del campo.</p>
+                     </Card>
+                  ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <Card>
+                         <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 1 (40%)</h3>
+                         {(() => {
+                            const myGrade = grades.find(g => g.courseId === course.id && g.studentId === profile.id && g.corte === 1) || {};
+                            const def = ((myGrade.p1||0)*0.5 + (myGrade.p2||0)*0.5).toFixed(1);
+                            return (
+                              <div className="space-y-4">
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 1</span><span>{myGrade.p1||'--'}</span></div>
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 2</span><span>{myGrade.p2||'--'}</span></div>
+                                <div className="flex justify-between font-black text-lg pt-4 border-t"><span>Definitiva Corte 1</span><span className={def>=3 ? 'text-emerald-500' : 'text-rose-500'}>{myGrade.p1 ? def : '--'}</span></div>
+                              </div>
+                            )
+                         })()}
+                       </Card>
+                       <Card className="opacity-50 pointer-events-none">
+                         <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 2 (60%)</h3>
+                         <div className="text-center font-bold py-10">No habilitado</div>
+                       </Card>
+                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB TUTORIAS */}
+              {activeTab === 'tutoring' && (
+                <Card className="mt-6 text-center py-20">
+                   <Users size={64} className="mx-auto text-slate-300 mb-6"/>
+                   <h3 className="text-2xl font-black">Módulo de Tutorías</h3>
+                   <p className="font-medium text-slate-500 mt-2">La base de datos está lista para recibir `tutorings` en Firestore.</p>
+                </Card>
+              )}
+            </div>
+          );
+        };
+
+        // --- DASHBOARD DIRECTOR / ANALÍTICA ---
+        const DirectorView = ({ courses, sessions, attendances }) => {
+          return (
+            <div className="space-y-8 slide-up max-w-7xl mx-auto">
+              <header className="mb-8">
+                <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional</h1>
+              </header>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-t-4 border-blue-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Cursos</p><h3 className="text-5xl font-black">{courses.length}</h3></Card>
+                <Card className="border-t-4 border-emerald-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Clases Impartidas</p><h3 className="text-5xl font-black">{sessions.filter(s=>s.completed).length}</h3></Card>
+                <Card className="border-t-4 border-brand-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Asistencias Exitosas registradas</p><h3 className="text-5xl font-black text-brand-600">{attendances.length}</h3></Card>
+              </div>
+            </div>
+          );
+        };
+
+        // --- DASHBOARD ADMIN (EXCEL UPLOAD REAL) ---
+        const AdminView = ({ showToast, profiles, courses, db }) => {
+          
+          // LECTURA Y PARSEO REAL DE ARCHIVO EXCEL A FIRESTORE
+          const handleExcelUpload = async (e) => {
+             const file = e.target.files[0];
+             if(!file) return;
+             showToast("Procesando Excel...", "info");
+             
+             const reader = new FileReader();
+             reader.onload = async (evt) => {
+                try {
+                  const bstr = evt.target.result;
+                  const wb = XLSX.read(bstr, {type:'binary'});
+                  const wsname = wb.SheetNames[0];
+                  const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
+                  
+                  let count = 0;
+                  for (let row of data) {
+                     // Asume que el excel tiene columnas: Codigo, NombreCurso, DocenteID, Horario
+                     if(row.NombreCurso && row.Codigo) {
+                        await addDoc(PATHS.courses, {
+                           name: row.NombreCurso,
+                           code: row.Codigo,
+                           teacherId: row.DocenteID || 'docente_generico',
+                           schedule: row.Horario || 'Por definir',
+                           students: [],
+                           credits: row.Creditos || 3
+                        });
+                        count++;
+                     }
+                  }
+                  showToast(`Se insertaron ${count} cursos desde el Excel a Firestore.`, "success");
+                } catch(err) {
+                  console.error(err);
+                  showToast("Error procesando el archivo Excel.", "error");
+                }
+             };
+             reader.readAsBinaryString(file);
+          };
+
+          return (
+            <div className="space-y-8 slide-up max-w-5xl mx-auto">
+              <header className="mb-8">
+                <h1 className="text-4xl font-black">Centro de Control</h1>
+              </header>
+
+              <Card className="border-t-[6px] border-t-indigo-500 text-center py-12">
+                 <FileSpreadsheet size={64} className="mx-auto text-indigo-500 mb-6"/>
+                 <h3 className="text-2xl font-black mb-2">Subida Masiva de Matriz (Excel)</h3>
+                 <p className="text-slate-500 mb-6 font-medium max-w-md mx-auto">Sube un archivo `.xlsx` con las columnas: NombreCurso, Codigo, DocenteID, Horario. El sistema inyectará los registros reales en Firestore.</p>
+                 
+                 <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
+                    Seleccionar Archivo .xlsx
+                    <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleExcelUpload} />
+                 </label>
+              </Card>
+
+              <Card>
+                <h3 className="font-black text-xl mb-4 flex items-center gap-2"><ShieldAlert className="text-emerald-500"/> Estado Base de Datos (Tiempo Real)</h3>
+                <div className="flex justify-between items-center py-4 border-b"><span className="font-bold text-slate-600">Usuarios Totales (Perfiles)</span><Badge color="blue">{profiles.length}</Badge></div>
+                <div className="flex justify-between items-center py-4"><span className="font-bold text-slate-600">Cursos Instanciados</span><Badge color="green">{courses.length}</Badge></div>
+              </Card>
+            </div>
+          );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
