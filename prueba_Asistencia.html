@@ -66,12 +66,13 @@
         import { createRoot } from 'react-dom/client';
         import { initializeApp } from 'firebase/app';
         import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, updateDoc, onSnapshot, addDoc, getDoc, query, where } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc, getDoc, query, where } from 'firebase/firestore';
         import { 
           LayoutDashboard, Users, BookOpen, Settings, QrCode, 
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
-          GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save
+          GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell
         } from 'lucide-react';
 
         // ============================================================================
@@ -87,12 +88,10 @@
           measurementId: "G-F7M7BJ7QQ7"
         };
 
-        // Si corre en Canvas usa su config, sino usa producción
         const app = initializeApp(typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // Rutas dinámicas. Para garantizar que funcione local y en Canvas.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'edusync-unab'; 
         
         const PATHS = {
@@ -102,6 +101,7 @@
           attendance: collection(db, 'artifacts', appId, 'public', 'data', 'attendance'),
           grades: collection(db, 'artifacts', appId, 'public', 'data', 'grades'),
           tutorings: collection(db, 'artifacts', appId, 'public', 'data', 'tutorings'),
+          events: collection(db, 'artifacts', appId, 'public', 'data', 'events'), // Nueva colección para calendario
         };
 
         // ============================================================================
@@ -156,6 +156,7 @@
           const [attendances, setAttendances] = useState([]);
           const [grades, setGrades] = useState([]);
           const [tutorings, setTutorings] = useState([]);
+          const [events, setEvents] = useState([]);
           
           const [loading, setLoading] = useState(true);
           const [darkMode, setDarkMode] = useState(false);
@@ -186,7 +187,7 @@
             return () => unsubscribe();
           }, []);
 
-          // FIRESTORE SYNC (Real Time Listeners)
+          // FIRESTORE SYNC
           useEffect(() => {
             if (!user) return;
             setLoading(true);
@@ -199,6 +200,7 @@
               onSnapshot(PATHS.attendance, s => setAttendances(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.grades, s => setGrades(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.tutorings, s => setTutorings(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              onSnapshot(PATHS.events, s => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
             ];
             setTimeout(() => setLoading(false), 800);
             return () => unsubs.forEach(u => u());
@@ -216,7 +218,6 @@
 
           const currentUserProfile = profiles.find(p => p.id === user?.uid);
 
-          // REAL GOOGLE AUTH WITH DOMAIN RESTRICTION AND ROLE ASSIGNMENT
           const handleGoogleLogin = async () => {
             try {
               const provider = new GoogleAuthProvider();
@@ -240,6 +241,12 @@
                 else if (email.includes('director') || email.includes('coordinador')) role = 'director';
                 else if (email.includes('docente') || email.includes('profesor')) role = 'teacher';
 
+                // Simular fecha de nacimiento para el demo del widget (fecha random en el año)
+                const today = new Date();
+                const randomMonth = Math.floor(Math.random() * 12);
+                const randomDay = Math.floor(Math.random() * 28) + 1;
+                const simulatedBirthDate = `${today.getFullYear() - 20}-${(randomMonth+1).toString().padStart(2,'0')}-${randomDay.toString().padStart(2,'0')}`;
+
                 await setDoc(profileRef, {
                   name: loggedUser.displayName || 'Usuario',
                   email: email,
@@ -247,7 +254,8 @@
                   photoURL: loggedUser.photoURL,
                   createdAt: new Date().toISOString(),
                   campus: 'Bucaramanga',
-                  status: 'Activo'
+                  status: 'Activo',
+                  birthDate: simulatedBirthDate 
                 });
               }
               showToast(`Autenticado como ${loggedUser.displayName}`, 'success');
@@ -307,7 +315,6 @@
           return (
             <div className={`flex-1 flex flex-col lg:flex-row bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 selection:bg-brand-200`}>
               
-              {/* TOASTS */}
               {toast && (
                 <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 slide-up border font-bold
                   ${toast.type === 'error' ? 'bg-white border-rose-500 text-rose-700' : 
@@ -343,7 +350,7 @@
                   )}
 
                   {currentUserProfile.role === 'admin' && (
-                    <NavItem icon={Settings} label="Administración DB" active={currentView === 'admin'} onClick={() => setCurrentView('admin')} />
+                    <NavItem icon={Settings} label="Administración Global" active={currentView === 'admin'} onClick={() => setCurrentView('admin')} />
                   )}
                 </nav>
 
@@ -370,16 +377,114 @@
 
               {/* MAIN */}
               <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
-                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} />}
+                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
                 {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} />}
-                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} />}
+                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} />}
                 {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} />}
               </main>
 
             </div>
           );
         }
+
+        // ============================================================================
+        // WIDGET: CALENDARIO INSTITUCIONAL (Motor de Fechas)
+        // ============================================================================
+        const AcademicCalendarWidget = ({ events, profiles }) => {
+          const now = new Date();
+          // Simular que el semestre empezó hace X semanas en base a la fecha actual. 
+          // En producción real, esto vendría de una configuración de Admin (ej. db/config/semestre)
+          const semesterStart = new Date(now.getFullYear(), 1, 1); // Febrero 1 del año actual
+          const diffTime = Math.abs(now - semesterStart);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          const currentWeek = Math.ceil(diffDays / 7) || 1;
+          
+          // Alerta parciales cada 4 semanas
+          const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0;
+
+          // Eventos próximos (próximos 30 días)
+          const upcomingEvents = events.filter(e => {
+            const eDate = new Date(e.date);
+            const timeDiff = eDate - now;
+            return timeDiff >= 0 && timeDiff <= (30 * 24 * 60 * 60 * 1000);
+          }).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 3);
+
+          // Cumpleaños próximos (mes actual)
+          const currentMonth = now.getMonth() + 1;
+          const upcomingBirthdays = profiles.filter(p => {
+             if (!p.birthDate) return false;
+             const [y, m, d] = p.birthDate.split('-');
+             return parseInt(m) === currentMonth && parseInt(d) >= now.getDate();
+          }).sort((a,b) => parseInt(a.birthDate.split('-')[2]) - parseInt(b.birthDate.split('-')[2])).slice(0, 3);
+
+          return (
+            <Card className="flex flex-col h-full bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 border-t-4 border-t-brand-500 relative overflow-hidden">
+              <div className="absolute top-[-20px] right-[-20px] opacity-5"><CalendarDays size={150}/></div>
+              <h3 className="font-black text-2xl mb-6 flex items-center gap-3 relative z-10"><CalendarDays className="text-brand-500"/> Calendario Académico</h3>
+              
+              {/* Semana Actual */}
+              <div className="bg-brand-50 dark:bg-brand-900/30 p-5 rounded-2xl mb-6 relative z-10">
+                <p className="text-brand-600 dark:text-brand-400 font-bold text-sm uppercase tracking-widest mb-1">Transcurriendo</p>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-4xl font-black text-slate-900 dark:text-white">Semana {currentWeek}</h4>
+                  <Badge color="blue">16 Semanas Totales</Badge>
+                </div>
+              </div>
+
+              {/* Alerta Parciales */}
+              {isPartialWeek && (
+                <div className="bg-rose-500 text-white p-4 rounded-2xl mb-6 flex items-center gap-4 animate-pulse shadow-lg shadow-rose-500/30 relative z-10">
+                  <Bell size={28} />
+                  <div>
+                    <h4 className="font-black text-lg">¡Alerta de Parciales!</h4>
+                    <p className="text-sm font-medium text-rose-100">Evaluaciones de corte programadas para esta semana.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Eventos y Festivos */}
+              <div className="mb-6 relative z-10">
+                <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-3 flex items-center gap-2"><PartyPopper size={14}/> Celebraciones Institucionales</h4>
+                {upcomingEvents.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">No hay eventos en los próximos 30 días.</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {upcomingEvents.map(e => (
+                      <li key={e.id} className="flex justify-between items-center bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-100 dark:border-slate-600 shadow-sm">
+                        <span className="font-bold text-slate-800 dark:text-white text-sm">{e.title}</span>
+                        <Badge color={e.type === 'festivo' ? 'red' : 'purple'}>{new Date(e.date).toLocaleDateString('es-ES', {month: 'short', day: 'numeric'})}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Cumpleaños */}
+              <div className="relative z-10 mt-auto pt-6 border-t border-slate-200 dark:border-slate-700">
+                <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-3 flex items-center gap-2"><Gift size={14}/> Cumpleaños este Mes</h4>
+                {upcomingBirthdays.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic">No hay cumpleaños cercanos.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {upcomingBirthdays.map(p => (
+                      <div key={p.id} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/50 flex items-center justify-center text-brand-600 font-black text-xs">
+                           {p.name.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-slate-800 dark:text-white">{p.name.split(' ')[0]}</p>
+                          <p className="text-xs text-slate-500">{new Date(p.birthDate).toLocaleDateString('es-ES', {month: 'long', day: 'numeric'})}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        };
+
 
         // ============================================================================
         // 5. MODULAR VIEWS
@@ -392,15 +497,15 @@
           </button>
         );
 
-        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings }) => {
-          if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} />;
-          if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} />;
-          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} />;
+        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles }) => {
+          if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles}/>;
+          if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles}/>;
+          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} />;
           return null;
         };
 
         // --- DASHBOARD ESTUDIANTE ---
-        const StudentDashboard = ({ profile, courses, sessions, attendances }) => {
+        const StudentDashboard = ({ profile, courses, sessions, attendances, events, profiles }) => {
           const myCourses = courses.filter(c => c.students.includes(profile.id));
           
           const stats = useMemo(() => {
@@ -417,7 +522,7 @@
           }, [myCourses, sessions, attendances, profile.id]);
 
           return (
-            <div className="space-y-8 slide-up max-w-6xl mx-auto">
+            <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
                 <h1 className="text-4xl font-black text-slate-900 dark:text-white">Hola, {profile.name.split(' ')[0]} 👋</h1>
                 <p className="text-slate-500 text-lg mt-2">Campus UNAB Bucaramanga</p>
@@ -433,52 +538,63 @@
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="flex flex-col items-center justify-center py-10 text-center">
-                  <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
-                  <h3 className="text-5xl font-black">{stats.percent}%</h3>
-                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
-                </Card>
-                <Card className="flex flex-col items-center justify-center py-10 text-center">
-                  <BookOpen size={64} className="text-brand-500 mb-4"/>
-                  <h3 className="text-5xl font-black">{myCourses.length}</h3>
-                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
-                </Card>
-                <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
-                  <AlertTriangle size={64} className="text-rose-500 mb-4"/>
-                  <h3 className="text-5xl font-black">{stats.absents}</h3>
-                  <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
-                </Card>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card className="flex flex-col items-center justify-center py-10 text-center col-span-1 md:col-span-2">
+                    <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
+                    <h3 className="text-5xl font-black">{stats.percent}%</h3>
+                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
+                  </Card>
+                  <Card className="flex flex-col items-center justify-center py-10 text-center">
+                    <BookOpen size={64} className="text-brand-500 mb-4"/>
+                    <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
+                  </Card>
+                  <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
+                    <AlertTriangle size={64} className="text-rose-500 mb-4"/>
+                    <h3 className="text-5xl font-black">{stats.absents}</h3>
+                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
+                  </Card>
+                </div>
+                {/* WIDGET CALENDARIO */}
+                <div className="lg:col-span-1">
+                  <AcademicCalendarWidget events={events} profiles={profiles} />
+                </div>
               </div>
             </div>
           );
         };
 
         // --- DASHBOARD DOCENTE ---
-        const TeacherDashboard = ({ profile, courses, sessions, tutorings }) => {
+        const TeacherDashboard = ({ profile, courses, sessions, tutorings, events, profiles }) => {
           const myCourses = courses.filter(c => c.teacherId === profile.id);
           const mySessions = sessions.filter(s => s.teacherId === profile.id && s.completed);
 
           return (
-            <div className="space-y-8 slide-up max-w-6xl mx-auto">
+            <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
                 <h1 className="text-4xl font-black">Portal Docente</h1>
                 <p className="text-slate-500 text-lg mt-2">Métricas e histórico de gestión de clases.</p>
               </header>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <Card className="border-t-4 border-brand-500">
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Cursos Asignados</p>
-                  <h3 className="text-5xl font-black">{myCourses.length}</h3>
-                </Card>
-                <Card className="border-t-4 border-emerald-500">
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Clases Dictadas</p>
-                  <h3 className="text-5xl font-black">{mySessions.length}</h3>
-                </Card>
-                <Card className="border-t-4 border-purple-500">
-                  <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Estudiantes Totales</p>
-                  <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => c.students || [])).size}</h3>
-                </Card>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <Card className="border-t-4 border-brand-500">
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Cursos Asignados</p>
+                    <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                  </Card>
+                  <Card className="border-t-4 border-emerald-500">
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Clases Dictadas</p>
+                    <h3 className="text-5xl font-black">{mySessions.length}</h3>
+                  </Card>
+                  <Card className="border-t-4 border-purple-500">
+                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Estudiantes Totales</p>
+                    <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => c.students || [])).size}</h3>
+                  </Card>
+                </div>
+                <div className="lg:col-span-1">
+                   <AcademicCalendarWidget events={events} profiles={profiles} />
+                </div>
               </div>
             </div>
           );
@@ -749,24 +865,35 @@
         };
 
         // --- DASHBOARD DIRECTOR / ANALÍTICA ---
-        const DirectorView = ({ courses, sessions, attendances }) => {
+        const DirectorView = ({ courses, sessions, attendances, events, profiles }) => {
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
                 <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional</h1>
               </header>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-t-4 border-blue-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Cursos</p><h3 className="text-5xl font-black">{courses.length}</h3></Card>
-                <Card className="border-t-4 border-emerald-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Clases Impartidas</p><h3 className="text-5xl font-black">{sessions.filter(s=>s.completed).length}</h3></Card>
-                <Card className="border-t-4 border-brand-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Asistencias Exitosas registradas</p><h3 className="text-5xl font-black text-brand-600">{attendances.length}</h3></Card>
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                 <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="border-t-4 border-blue-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Cursos</p><h3 className="text-5xl font-black">{courses.length}</h3></Card>
+                    <Card className="border-t-4 border-emerald-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Clases Impartidas</p><h3 className="text-5xl font-black">{sessions.filter(s=>s.completed).length}</h3></Card>
+                    <Card className="border-t-4 border-brand-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Asistencias registradas</p><h3 className="text-5xl font-black text-brand-600">{attendances.length}</h3></Card>
+                 </div>
+                 <div className="lg:col-span-1">
+                    <AcademicCalendarWidget events={events} profiles={profiles} />
+                 </div>
               </div>
             </div>
           );
         };
 
-        // --- DASHBOARD ADMIN (EXCEL UPLOAD REAL) ---
-        const AdminView = ({ showToast, profiles, courses, db }) => {
+        // --- DASHBOARD ADMIN (EXCEL UPLOAD REAL + CALENDAR + USERS) ---
+        const AdminView = ({ showToast, profiles, courses, db, events }) => {
+          const [adminTab, setAdminTab] = useState('resumen'); // resumen, usuarios, calendario
           
+          // Formulario Eventos
+          const [eventTitle, setEventTitle] = useState('');
+          const [eventDate, setEventDate] = useState('');
+          const [eventType, setEventType] = useState('institucional');
+
           // LECTURA Y PARSEO REAL DE ARCHIVO EXCEL A FIRESTORE
           const handleExcelUpload = async (e) => {
              const file = e.target.files[0];
@@ -783,7 +910,6 @@
                   
                   let count = 0;
                   for (let row of data) {
-                     // Asume que el excel tiene columnas: Codigo, NombreCurso, DocenteID, Horario
                      if(row.NombreCurso && row.Codigo) {
                         await addDoc(PATHS.courses, {
                            name: row.NombreCurso,
@@ -798,35 +924,147 @@
                   }
                   showToast(`Se insertaron ${count} cursos desde el Excel a Firestore.`, "success");
                 } catch(err) {
-                  console.error(err);
                   showToast("Error procesando el archivo Excel.", "error");
                 }
              };
              reader.readAsBinaryString(file);
           };
 
+          const handleAddEvent = async () => {
+             if (!eventTitle || !eventDate) return showToast("Faltan datos del evento", "error");
+             try {
+                await addDoc(PATHS.events, { title: eventTitle, date: eventDate, type: eventType });
+                showToast("Evento guardado correctamente", "success");
+                setEventTitle(''); setEventDate('');
+             } catch(e) { showToast("Error guardando evento", "error"); }
+          };
+
+          const handleDeleteEvent = async (id) => {
+             try {
+                await deleteDoc(doc(PATHS.events, id));
+                showToast("Evento eliminado", "info");
+             } catch(e) { showToast("Error eliminando", "error"); }
+          }
+
+          const getRoleColor = (role) => {
+            switch(role) {
+               case 'admin': return 'purple';
+               case 'director': return 'blue';
+               case 'teacher': return 'green';
+               default: return 'gray';
+            }
+          }
+
           return (
-            <div className="space-y-8 slide-up max-w-5xl mx-auto">
-              <header className="mb-8">
-                <h1 className="text-4xl font-black">Centro de Control</h1>
+            <div className="space-y-8 slide-up max-w-7xl mx-auto">
+              <header className="mb-8 flex items-center gap-6">
+                <div className="bg-slate-900 w-20 h-20 rounded-full flex items-center justify-center shadow-xl"><Settings size={40} className="text-white"/></div>
+                <div>
+                   <h1 className="text-4xl font-black">Centro de Control</h1>
+                   <p className="text-slate-500 text-lg font-medium">Bienvenido, Administrador Principal. Revisa que todo funcione a la perfección.</p>
+                </div>
               </header>
 
-              <Card className="border-t-[6px] border-t-indigo-500 text-center py-12">
-                 <FileSpreadsheet size={64} className="mx-auto text-indigo-500 mb-6"/>
-                 <h3 className="text-2xl font-black mb-2">Subida Masiva de Matriz (Excel)</h3>
-                 <p className="text-slate-500 mb-6 font-medium max-w-md mx-auto">Sube un archivo `.xlsx` con las columnas: NombreCurso, Codigo, DocenteID, Horario. El sistema inyectará los registros reales en Firestore.</p>
-                 
-                 <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
-                    Seleccionar Archivo .xlsx
-                    <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleExcelUpload} />
-                 </label>
-              </Card>
+              <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+                <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Resumen y Data</button>
+                <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Gestión Usuarios</button>
+                <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><CalendarDays className="inline mr-2" size={18}/> Calendario Institucional</button>
+              </div>
 
-              <Card>
-                <h3 className="font-black text-xl mb-4 flex items-center gap-2"><ShieldAlert className="text-emerald-500"/> Estado Base de Datos (Tiempo Real)</h3>
-                <div className="flex justify-between items-center py-4 border-b"><span className="font-bold text-slate-600">Usuarios Totales (Perfiles)</span><Badge color="blue">{profiles.length}</Badge></div>
-                <div className="flex justify-between items-center py-4"><span className="font-bold text-slate-600">Cursos Instanciados</span><Badge color="green">{courses.length}</Badge></div>
-              </Card>
+              {adminTab === 'resumen' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                   <Card className="border-t-[6px] border-t-indigo-500 text-center py-12">
+                      <FileSpreadsheet size={64} className="mx-auto text-indigo-500 mb-6"/>
+                      <h3 className="text-2xl font-black mb-2">Ingesta de Matriz (Excel)</h3>
+                      <p className="text-slate-500 mb-6 font-medium">Columnas requeridas: NombreCurso, Codigo, DocenteID, Horario.</p>
+                      
+                      <label className="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
+                         Seleccionar Archivo .xlsx
+                         <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleExcelUpload} />
+                      </label>
+                   </Card>
+
+                   <Card>
+                     <h3 className="font-black text-xl mb-4 flex items-center gap-2"><ShieldAlert className="text-emerald-500"/> Estado Base de Datos</h3>
+                     <div className="flex justify-between items-center py-4 border-b"><span className="font-bold text-slate-600">Total Perfiles</span><Badge color="blue">{profiles.length}</Badge></div>
+                     <div className="flex justify-between items-center py-4"><span className="font-bold text-slate-600">Cursos Instanciados</span><Badge color="green">{courses.length}</Badge></div>
+                   </Card>
+                 </div>
+              )}
+
+              {adminTab === 'usuarios' && (
+                 <Card className="mt-6">
+                    <h3 className="font-black text-2xl mb-6">Auditoría de Roles y Usuarios</h3>
+                    <div className="overflow-x-auto">
+                       <table className="w-full text-left text-sm">
+                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-l-xl">Nombre</th><th className="py-4 px-4">Email Institucional</th><th className="py-4 px-4">Cumpleaños</th><th className="py-4 px-4 text-center rounded-r-xl">Rol Activo</th></tr></thead>
+                          <tbody>
+                             {profiles.map(p => (
+                               <tr key={p.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                  <td className="py-4 px-4 font-bold text-slate-800 dark:text-white flex items-center gap-3">
+                                     <img src={p.photoURL || `https://ui-avatars.com/api/?name=${p.name}&background=eee`} className="w-8 h-8 rounded-full" alt="avatar"/>
+                                     {p.name}
+                                  </td>
+                                  <td className="py-4 px-4 text-slate-500">{p.email}</td>
+                                  <td className="py-4 px-4 font-medium">{p.birthDate ? new Date(p.birthDate).toLocaleDateString() : 'N/A'}</td>
+                                  <td className="py-4 px-4 text-center"><Badge color={getRoleColor(p.role)}>{p.role}</Badge></td>
+                               </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </Card>
+              )}
+
+              {adminTab === 'calendario' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                    <Card>
+                       <h3 className="font-black text-2xl mb-6">Agregar Fecha / Celebración</h3>
+                       <div className="space-y-4">
+                          <div>
+                             <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Nombre del Evento</label>
+                             <input type="text" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} placeholder="Ej: UNAB Fest, Semana Santa" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700"/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Fecha</label>
+                                <input type="date" value={eventDate} onChange={e=>setEventDate(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700"/>
+                             </div>
+                             <div>
+                                <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Tipo</label>
+                                <select value={eventType} onChange={e=>setEventType(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700">
+                                   <option value="institucional">Institucional</option>
+                                   <option value="festivo">Festivo</option>
+                                </select>
+                             </div>
+                          </div>
+                          <Button onClick={handleAddEvent} className="w-full mt-4">Guardar en Calendario</Button>
+                       </div>
+                    </Card>
+
+                    <Card>
+                       <h3 className="font-black text-2xl mb-6">Festividades Registradas</h3>
+                       {events.length === 0 ? (
+                          <p className="text-slate-500 italic">No hay celebraciones cargadas en la base de datos.</p>
+                       ) : (
+                          <ul className="divide-y divide-slate-100 dark:divide-slate-700">
+                             {events.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(e => (
+                                <li key={e.id} className="py-3 flex justify-between items-center">
+                                   <div>
+                                      <p className="font-bold text-slate-800 dark:text-white">{e.title}</p>
+                                      <p className="text-xs text-slate-500">{new Date(e.date).toLocaleDateString('es-ES', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                                   </div>
+                                   <div className="flex items-center gap-3">
+                                      <Badge color={e.type === 'festivo' ? 'red' : 'purple'}>{e.type}</Badge>
+                                      <button onClick={()=>handleDeleteEvent(e.id)} className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                                   </div>
+                                </li>
+                             ))}
+                          </ul>
+                       )}
+                    </Card>
+                 </div>
+              )}
             </div>
           );
         };
