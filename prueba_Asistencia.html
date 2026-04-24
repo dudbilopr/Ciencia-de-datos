@@ -56,6 +56,10 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .dark ::-webkit-scrollbar-thumb { background: #475569; }
+
+      /* Animación Data Science */
+      .grow-up { animation: growUp 1s ease-out forwards; transform-origin: bottom; }
+      @keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
     </style>
 </head>
 <body>
@@ -72,7 +76,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity
         } from 'lucide-react';
 
         // ============================================================================
@@ -401,12 +405,12 @@
 
               {/* MAIN */}
               <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
-                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
+                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} />}
                 {currentView === 'profile' && <ProfileView profile={currentUserProfile} db={db} appId={appId} showToast={showToast} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
-                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} />}
-                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} />}
-                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
+                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} semesterConfig={semesterConfig} />}
+                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} attendances={attendances} />}
+                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} />}
               </main>
 
             </div>
@@ -457,7 +461,7 @@
           return (
             <Card className="flex flex-col h-full bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 border-t-4 border-t-brand-500 relative overflow-hidden">
               <div className="absolute top-[-20px] right-[-20px] opacity-5"><CalendarDays size={150}/></div>
-              <h3 className="font-black text-2xl mb-6 flex items-center gap-3 relative z-10"><CalendarDays className="text-brand-500"/> Calendario 202610</h3>
+              <h3 className="font-black text-2xl mb-6 flex items-center gap-3 relative z-10"><CalendarDays className="text-brand-500"/> Calendario Académico</h3>
               
               <div className="bg-brand-50 dark:bg-brand-900/30 p-5 rounded-2xl mb-6 relative z-10">
                 <p className="text-brand-600 dark:text-brand-400 font-bold text-sm uppercase tracking-widest mb-1">Transcurriendo</p>
@@ -628,10 +632,10 @@
           </button>
         );
 
-        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles, semesterConfig }) => {
+        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles, semesterConfig, grades }) => {
           if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
           if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
-          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />;
+          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} />;
           return null;
         };
 
@@ -791,11 +795,16 @@
         };
 
         // --- DETALLE DEL CURSO ---
-        const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db, appId }) => {
+        const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db, appId, semesterConfig }) => {
           const [topic, setTopic] = useState('');
           const [activeSession, setActiveSession] = useState(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
           const [studentTokenInput, setStudentTokenInput] = useState('');
           const [activeTab, setActiveTab] = useState('attendance'); 
+          
+          const [isAddingPast, setIsAddingPast] = useState(false);
+          const [pastTopic, setPastTopic] = useState('');
+          const [pastDate, setPastDate] = useState('');
+          const [editingSession, setEditingSession] = useState(null);
 
           useEffect(() => {
             let interval;
@@ -859,6 +868,32 @@
              }
           };
 
+          const handleCreatePastSession = async () => {
+             if (!pastTopic || !pastDate) return showToast("Temática y Fecha son obligatorios", "error");
+             try {
+                 await addDoc(PATHS.sessions, {
+                     courseId: course.id, teacherId: profile.id, topic: pastTopic, status: 'completed', completed: true, date: new Date(pastDate).toISOString(), currentToken: null
+                 });
+                 showToast("Sesión histórica creada. Usa el botón 'Editar Asist.' en la semana correspondiente para marcar la asistencia.", "success");
+                 setIsAddingPast(false); setPastTopic(''); setPastDate('');
+             } catch (e) {
+                 showToast("Error al crear sesión pasada", "error");
+             }
+          };
+
+          const handleTogglePastManualAttendance = async (student, sessionId) => {
+             const existingRecord = attendances.find(a => a.sessionId === sessionId && (a.studentId === student.id || a.studentEmail === student.email));
+             try {
+               if (existingRecord) {
+                   await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', existingRecord.id));
+               } else {
+                   await addDoc(PATHS.attendance, { sessionId: sessionId, courseId: course.id, studentId: student.id, studentEmail: student.email, timestamp: new Date().toISOString() });
+               }
+             } catch(e) {
+                 showToast("Error modificando asistencia histórica", "error");
+             }
+          };
+
           const handleSaveGrade = async (studentEmail, corte, field, value) => {
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              const numVal = parseFloat(value);
@@ -882,6 +917,18 @@
           });
           const totalEstudiantes = enrolledStudentsData.length;
 
+          // INYECCIÓN: Lógica para agrupar sesiones por semana
+          const startDateStr = semesterConfig?.startDate || '2026-02-02';
+          const semesterStart = new Date(startDateStr + 'T00:00:00');
+          const now = new Date();
+          const simulatedNow = now < semesterStart ? new Date('2026-03-01T00:00:00') : now;
+
+          const diffTime = simulatedNow.getTime() - semesterStart.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          let currentWeek = Math.ceil(diffDays / 7) || 1;
+          if (currentWeek < 1) currentWeek = 1;
+          if (currentWeek > 18) currentWeek = 18; 
+
           return (
             <div className="max-w-6xl mx-auto slide-up space-y-6">
               <button onClick={onBack} className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-4 hover:text-brand-600">&larr; Regresar</button>
@@ -904,13 +951,34 @@
               {/* TAB ASISTENCIA */}
               {activeTab === 'attendance' && (
                 <div className="space-y-6 mt-6">
-                  {profile.role === 'teacher' && (
+                  {profile.role === 'teacher' && !editingSession && (
                     <Card className={activeSession ? "border-emerald-500 shadow-emerald-500/20 shadow-xl" : ""}>
                       {!activeSession ? (
-                        <div>
-                           <h2 className="text-2xl font-black mb-4">Activar Control Híbrido (QR / Manual)</h2>
-                           <input type="text" placeholder="Temática de la sesión" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl mb-4 mr-4 bg-slate-50 dark:bg-slate-700"/>
-                           <Button onClick={handleStartClass}>Iniciar Clase</Button>
+                        <div className="flex flex-col gap-6">
+                           <div>
+                               <h2 className="text-2xl font-black mb-4">Activar Control Híbrido (QR / Manual)</h2>
+                               <input type="text" placeholder="Temática de la sesión actual" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl mb-4 mr-4 bg-slate-50 dark:bg-slate-700"/>
+                               <Button onClick={handleStartClass}>Iniciar Clase de Hoy</Button>
+                           </div>
+                           
+                           {/* Botón y Formulario para Sesiones Pasadas */}
+                           <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
+                               {!isAddingPast ? (
+                                   <button onClick={() => setIsAddingPast(true)} className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors flex items-center gap-2"><Clock size={16}/> + Registrar clase de semanas pasadas</button>
+                               ) : (
+                                   <div className="bg-slate-50 dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-600 slide-up">
+                                       <h3 className="font-black text-sm mb-4 uppercase tracking-widest text-slate-500">Registrar Sesión Histórica</h3>
+                                       <div className="flex flex-col md:flex-row gap-4 mb-4">
+                                           <input type="date" value={pastDate} onChange={e=>setPastDate(e.target.value)} className="px-4 py-3 border-2 rounded-xl bg-white dark:bg-slate-700 text-sm font-bold"/>
+                                           <input type="text" placeholder="Temática vista en esa clase..." value={pastTopic} onChange={e=>setPastTopic(e.target.value)} className="flex-1 px-4 py-3 border-2 rounded-xl bg-white dark:bg-slate-700 text-sm font-bold"/>
+                                       </div>
+                                       <div className="flex gap-4">
+                                           <Button onClick={handleCreatePastSession} className="py-2 text-sm px-6">Guardar Sesión Histórica</Button>
+                                           <button onClick={() => setIsAddingPast(false)} className="text-slate-500 hover:text-slate-800 font-bold text-sm px-4">Cancelar</button>
+                                       </div>
+                                   </div>
+                               )}
+                           </div>
                         </div>
                       ) : (
                         <div className="flex flex-col xl:flex-row gap-8 items-start">
@@ -958,6 +1026,40 @@
                     </Card>
                   )}
 
+                  {/* PANEL DE EDICIÓN DE ASISTENCIA HISTÓRICA */}
+                  {profile.role === 'teacher' && editingSession && (
+                      <Card className="border-t-[6px] border-t-amber-500 shadow-xl shadow-amber-500/10">
+                          <div className="flex justify-between items-center mb-6 border-b pb-4 border-slate-200 dark:border-slate-700">
+                              <div>
+                                  <Badge color="yellow" className="mb-2">Editando Registro Histórico</Badge>
+                                  <h2 className="text-3xl font-black">{editingSession.topic}</h2>
+                                  <p className="text-sm text-slate-500 font-bold">{new Date(editingSession.date).toLocaleDateString()}</p>
+                              </div>
+                              <Button onClick={() => setEditingSession(null)} variant="secondary">Finalizar Edición</Button>
+                          </div>
+                          
+                          <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
+                             {enrolledStudentsData.map(st => {
+                                const isPresent = attendances.some(a => a.sessionId === editingSession.id && (a.studentId === st.id || a.studentEmail === st.email));
+                                return (
+                                   <div key={st.email} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
+                                      <div className="min-w-0 flex-1 pr-2">
+                                         <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{st.name}</p>
+                                         <p className="text-[10px] text-slate-500 truncate">{st.email}</p>
+                                      </div>
+                                      <button 
+                                         onClick={() => handleTogglePastManualAttendance(st, editingSession.id)}
+                                         className={`px-4 py-2 rounded-lg font-bold text-xs shrink-0 transition-colors ${isPresent ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-300'}`}
+                                      >
+                                         {isPresent ? '✅ Presente' : 'Marcar'}
+                                      </button>
+                                   </div>
+                                )
+                             })}
+                          </div>
+                      </Card>
+                  )}
+
                   {profile.role === 'student' && (
                     <Card className={activeSession ? "border-brand-500 shadow-brand-500/20 shadow-xl" : ""}>
                        <h2 className="text-2xl font-black mb-4">Registro Asistencia</h2>
@@ -975,22 +1077,65 @@
                     </Card>
                   )}
 
+                  {/* INYECCIÓN: HISTORIAL DE CLASES AGRUPADO POR SEMANA */}
                   <Card>
-                    <h3 className="font-black text-xl mb-4">Historial de Clases</h3>
-                    <table className="w-full text-left text-sm">
-                       <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest"><th className="pb-3">Fecha</th><th className="pb-3">Temática</th><th className="pb-3 text-right">Asistencia</th></tr></thead>
-                       <tbody>
-                          {courseSessions.map(s => {
-                            const presentCount = attendances.filter(a => a.sessionId === s.id).length;
-                            const isPresent = attendances.some(a => a.sessionId === s.id && (a.studentId === profile.id || a.studentEmail === profile.email));
-                            return (
-                              <tr key={s.id} className="border-b border-slate-100"><td className="py-4 font-bold">{new Date(s.date).toLocaleDateString()}</td><td className="py-4 font-bold text-slate-800 dark:text-white">{s.topic}</td><td className="py-4 text-right">
-                                {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
-                              </td></tr>
-                            )
-                          })}
-                       </tbody>
-                    </table>
+                    <h3 className="font-black text-xl mb-6">Historial de Clases por Semanas</h3>
+                    {[...Array(currentWeek)].map((_, i) => {
+                        const w = currentWeek - i;
+                        const wSessions = courseSessions.filter(s => {
+                            const sDiff = new Date(s.date).getTime() - semesterStart.getTime();
+                            const sWeek = Math.ceil(Math.ceil(sDiff / (1000*60*60*24)) / 7) || 1;
+                            return sWeek === w;
+                        });
+
+                        return (
+                            <div key={w} className="mb-8">
+                                <h4 className="font-black text-slate-700 dark:text-slate-300 mb-3 border-b border-slate-200 dark:border-slate-700 pb-2 flex items-center justify-between">
+                                    <span>Semana {w}</span>
+                                </h4>
+                                {wSessions.length > 0 ? (
+                                    <table className="w-full text-left text-sm">
+                                       <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest"><th className="pb-3">Fecha</th><th className="pb-3">Temática</th><th className="pb-3 text-right">Asistencia</th>{profile.role === 'teacher' && <th className="pb-3 text-right">Acciones</th>}</tr></thead>
+                                       <tbody>
+                                          {wSessions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(s => {
+                                            const presentCount = attendances.filter(a => a.sessionId === s.id).length;
+                                            const isPresent = attendances.some(a => a.sessionId === s.id && (a.studentId === profile.id || a.studentEmail === profile.email));
+                                            return (
+                                              <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                                <td className="py-4 font-bold pl-2">{new Date(s.date).toLocaleDateString()}</td>
+                                                <td className="py-4 font-bold text-slate-800 dark:text-white">{s.topic}</td>
+                                                <td className="py-4 text-right">
+                                                  {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
+                                                </td>
+                                                {profile.role === 'teacher' && (
+                                                  <td className="py-4 text-right pr-2">
+                                                    <button onClick={() => { setEditingSession(s); setActiveTab('attendance'); window.scrollTo({top: 0, behavior: 'smooth'}); }} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-4 py-2 rounded-lg transition-colors border border-amber-200 shadow-sm">Editar Asist.</button>
+                                                  </td>
+                                                )}
+                                              </tr>
+                                            )
+                                          })}
+                                       </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 p-4 rounded-xl flex items-center justify-between">
+                                        <div>
+                                            <AlertTriangle className="text-rose-500 inline mr-2" size={20}/>
+                                            <span className="text-rose-700 dark:text-rose-400 font-bold text-sm">No se registraron clases en esta semana.</span>
+                                        </div>
+                                        {profile.role === 'teacher' && (
+                                            <button onClick={() => {
+                                                const targetDate = new Date(semesterStart.getTime() + (w - 1) * 7 * 24 * 60 * 60 * 1000);
+                                                setPastDate(targetDate.toISOString().split('T')[0]);
+                                                setIsAddingPast(true);
+                                                window.scrollTo({top: 0, behavior: 'smooth'});
+                                            }} className="text-xs font-bold text-rose-600 bg-rose-100 hover:bg-rose-200 px-3 py-1.5 rounded-lg transition-colors shadow-sm">Registrar Clase Manual</button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                   </Card>
                 </div>
               )}
@@ -1058,18 +1203,76 @@
           );
         };
 
-        // --- DASHBOARD DIRECTOR / ANALÍTICA ---
-        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig }) => {
+        // --- DASHBOARD DIRECTOR / ANALÍTICA (ACTUALIZADO CON CIENCIA DE DATOS) ---
+        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [] }) => {
+          
+          // Data Science Metrics: Histograma de notas P1
+          const gradeDistrib = [0,0,0,0,0]; // 0-1, 1-2, 2-3, 3-4, 4-5
+          grades.forEach(g => {
+             if (g.p1 !== undefined) {
+                 if (g.p1 < 1.0) gradeDistrib[0]++;
+                 else if (g.p1 < 2.0) gradeDistrib[1]++;
+                 else if (g.p1 < 3.0) gradeDistrib[2]++;
+                 else if (g.p1 < 4.0) gradeDistrib[3]++;
+                 else gradeDistrib[4]++;
+             }
+          });
+          const maxDistrib = Math.max(...gradeDistrib, 1);
+
+          // Cálculo Real de Riesgo y Deserción Institucional
+          let globalExpected = 0;
+          let globalAttended = attendances.length;
+          courses.forEach(c => {
+             const cSessions = sessions.filter(s => s.courseId === c.id && s.completed).length;
+             const cStudents = new Set([...(c.students || []), ...(c.studentsEmails || [])]).size;
+             globalExpected += (cSessions * cStudents);
+          });
+          const globalAttendanceRate = globalExpected === 0 ? 100 : Math.round((globalAttended / globalExpected) * 100);
+
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
-                <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional</h1>
+                <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional de Alto Nivel</h1>
+                <p className="text-slate-500 font-medium mt-2">Métricas de rendimiento, predicción de deserción y control académico global.</p>
               </header>
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                 <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Card className="border-t-4 border-blue-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Cursos</p><h3 className="text-5xl font-black">{courses.length}</h3></Card>
-                    <Card className="border-t-4 border-emerald-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Clases Impartidas</p><h3 className="text-5xl font-black">{sessions.filter(s=>s.completed).length}</h3></Card>
-                    <Card className="border-t-4 border-brand-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Asistencias registradas</p><h3 className="text-5xl font-black text-brand-600">{attendances.length}</h3></Card>
+                 <div className="lg:col-span-3 flex flex-col gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="border-t-4 border-blue-500"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Cursos Activos</p><h3 className="text-5xl font-black">{courses.length}</h3></Card>
+                        <Card className="border-t-4 border-emerald-500"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Clases Impartidas</p><h3 className="text-5xl font-black">{sessions.filter(s=>s.completed).length}</h3></Card>
+                        <Card className="border-t-4 border-rose-500"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Tasa Global Asistencia</p><h3 className={`text-5xl font-black ${globalAttendanceRate < 80 ? 'text-rose-600' : 'text-emerald-600'}`}>{globalAttendanceRate}%</h3></Card>
+                    </div>
+                    
+                    {/* INYECCIÓN: DATA SCIENCE GRAPHICS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       <Card className="bg-slate-900 dark:bg-slate-950 border-none shadow-2xl">
+                           <h3 className="text-white font-black text-xl mb-6 flex items-center gap-2"><BarChart3 size={20} className="text-brand-400"/> Histograma de Notas (Corte 1)</h3>
+                           <div className="flex items-end justify-between h-40 gap-2 mb-2">
+                              {gradeDistrib.map((val, idx) => (
+                                  <div key={idx} className="relative flex flex-col justify-end w-full h-full group">
+                                     <div className="bg-brand-500 hover:bg-brand-400 rounded-t-md transition-all grow-up" style={{height: `${(val / maxDistrib) * 100}%`}}></div>
+                                     <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-xs font-black px-2 py-1 rounded shadow-lg">{val}</div>
+                                  </div>
+                              ))}
+                           </div>
+                           <div className="flex justify-between text-slate-400 text-xs font-bold border-t border-slate-700 pt-2">
+                              <span>0-1</span><span>1-2</span><span>2-3</span><span>3-4</span><span>4-5</span>
+                           </div>
+                       </Card>
+
+                       <Card className="flex flex-col justify-center border-t-4 border-brand-500">
+                           <h3 className="font-black text-xl mb-4 flex items-center gap-2"><PieChart size={20} className="text-brand-500"/> Riesgo de Deserción</h3>
+                           <p className="text-sm text-slate-500 mb-6">Proporción de inasistencias en base a la capacidad total institucional esperada.</p>
+                           <div className="w-full bg-slate-100 dark:bg-slate-700 h-6 rounded-full overflow-hidden flex shadow-inner">
+                               <div className="bg-emerald-500 h-full" style={{width: `${globalAttendanceRate}%`}}></div>
+                               <div className="bg-rose-500 h-full" style={{width: `${100 - globalAttendanceRate}%`}}></div>
+                           </div>
+                           <div className="flex justify-between text-xs font-bold mt-3">
+                              <span className="text-emerald-600">Sólida ({globalAttendanceRate}%)</span>
+                              <span className="text-rose-600">Riesgo ({100 - globalAttendanceRate}%)</span>
+                           </div>
+                       </Card>
+                    </div>
                  </div>
                  <div className="lg:col-span-1">
                     <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
@@ -1080,7 +1283,7 @@
         };
 
         // --- DASHBOARD ADMIN ---
-        const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId, grades }) => {
+        const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId, grades, attendances = [] }) => {
           const [adminTab, setAdminTab] = useState('resumen'); 
           
           const [eventTitle, setEventTitle] = useState('');
