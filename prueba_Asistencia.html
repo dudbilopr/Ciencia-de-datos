@@ -72,7 +72,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle
         } from 'lucide-react';
 
         // ============================================================================
@@ -166,7 +166,7 @@
 
           const [currentView, setCurrentView] = useState('dashboard');
           const [selectedCourse, setSelectedCourse] = useState(null);
-          const [roleOverride, setRoleOverride] = useState(null); // INYECCIÓN: Simulador de roles para Admin
+          const [roleOverride, setRoleOverride] = useState(null);
 
           // INIT & AUTH LISTENER
           useEffect(() => {
@@ -222,7 +222,6 @@
             setTimeout(() => setToast(null), 4000);
           };
 
-          // INYECCIÓN: Si hay override, fusiona el perfil.
           const realProfile = profiles.find(p => p.id === user?.uid);
           const currentUserProfile = realProfile ? { ...realProfile, role: roleOverride || realProfile.role } : null;
 
@@ -247,7 +246,7 @@
                 let role = 'student'; 
                 if (email === 'dudbilopr@gmail.com') role = 'admin';
                 else if (email.includes('director') || email.includes('coordinador')) role = 'director';
-                else if (email.includes('docente') || email.includes('profesor')) role = 'teacher';
+                else if (email.includes('docente') || email.includes('profesor') || courses.some(c => c.teacherEmail === email)) role = 'teacher';
 
                 const today = new Date();
                 const randomMonth = Math.floor(Math.random() * 12);
@@ -351,6 +350,8 @@
                   
                   <NavItem icon={BookOpen} label="Asignaturas y Horarios" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
                   
+                  <NavItem icon={UserCircle} label="Mi Perfil" active={currentView === 'profile'} onClick={() => setCurrentView('profile')} />
+
                   {(currentUserProfile.role === 'director' || currentUserProfile.role === 'admin') && (
                     <NavItem icon={PieChart} label="Analítica Institucional" active={currentView === 'analytics'} onClick={() => setCurrentView('analytics')} />
                   )}
@@ -362,7 +363,6 @@
 
                 <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
                   
-                  {/* INYECCIÓN: SIMULADOR DE ROLES (SOLO PARA ADMIN ORIGINAL) */}
                   {realProfile?.role === 'admin' && (
                     <div className="mb-6 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-xl border border-purple-200 dark:border-purple-700/50">
                       <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block mb-1">Simulador de Roles</label>
@@ -402,6 +402,7 @@
               {/* MAIN */}
               <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
                 {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
+                {currentView === 'profile' && <ProfileView profile={currentUserProfile} db={db} appId={appId} showToast={showToast} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
                 {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} />}
                 {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} />}
@@ -413,17 +414,14 @@
         }
 
         // ============================================================================
-        // WIDGET: CALENDARIO INSTITUCIONAL (Hardcode 202610 por defecto)
+        // WIDGET: CALENDARIO INSTITUCIONAL
         // ============================================================================
         const AcademicCalendarWidget = ({ events = [], profiles = [], semesterConfig = {} }) => {
           const now = new Date();
           
-          // INYECCIÓN: Configuración del Semestre 202610
           const startDateStr = semesterConfig?.startDate || '2026-02-02';
           const semesterStart = new Date(startDateStr + 'T00:00:00');
           
-          // Para visualizar la demostración hoy, calculamos la diferencia, 
-          // Si estamos antes de 2026, simulamos que la fecha actual es relativa al inicio del semestre.
           const simulatedNow = now < semesterStart ? new Date('2026-03-01T00:00:00') : now;
 
           const diffTime = simulatedNow.getTime() - semesterStart.getTime();
@@ -431,7 +429,6 @@
           let rawWeek = Math.ceil(diffDays / 7) || 1;
           if (rawWeek < 1) rawWeek = 1;
           
-          // Descontar semanas excluidas (Semana Santa es la semana 9 desde Feb 2)
           const excludedStr = semesterConfig?.excludedWeeks || '9';
           const excludedList = excludedStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
           
@@ -442,10 +439,8 @@
           
           const isExcludedWeek = excludedList.includes(rawWeek);
 
-          // Alerta parciales cada 4 semanas lectivas
           const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0 && !isExcludedWeek;
 
-          // Eventos próximos
           const upcomingEvents = (events || []).filter(e => {
             const eDate = new Date(e.date);
             const timeDiff = eDate - simulatedNow;
@@ -523,7 +518,7 @@
         };
 
         // ============================================================================
-        // INYECCIÓN: WIDGET DE AGENDA SEMANAL INTERACTIVA
+        // WIDGET: AGENDA SEMANAL INTERACTIVA
         // ============================================================================
         const WeeklyAgendaWidget = ({ courses }) => {
           const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
@@ -540,7 +535,6 @@
                           </div>
                           <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-b-xl flex-1 flex flex-col gap-3 min-h-[200px]">
                              {courses.filter(c => c.schedule && c.schedule.includes(day)).map((c, i) => {
-                                // Extracción simple de la hora para visualización
                                 const timeMatch = c.schedule.match(/\d{2}:\d{2}-\d{2}:\d{2}/);
                                 const time = timeMatch ? timeMatch[0] : '';
                                 return (
@@ -563,6 +557,69 @@
         // ============================================================================
         // 5. MODULAR VIEWS
         // ============================================================================
+        
+        const ProfileView = ({ profile, db, appId, showToast }) => {
+          const [formData, setFormData] = useState({
+             name: profile.name || '',
+             birthDate: profile.birthDate || '',
+             campus: profile.campus || 'Bucaramanga',
+             phone: profile.phone || ''
+          });
+
+          const handleSave = async () => {
+             try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'profiles', profile.id), formData);
+                showToast("Información demográfica actualizada", "success");
+             } catch(e) {
+                showToast("Error al actualizar perfil", "error");
+             }
+          };
+
+          return (
+             <div className="max-w-4xl mx-auto slide-up space-y-6">
+                <header className="mb-8">
+                  <h1 className="text-4xl font-black">Mi Perfil Institucional</h1>
+                  <p className="text-slate-500 mt-2 font-medium">Actualiza tu información demográfica para uso en el sistema académico.</p>
+                </header>
+                <Card>
+                   <div className="flex flex-col md:flex-row gap-8">
+                      <div className="flex flex-col items-center gap-4 border-b md:border-b-0 md:border-r pb-6 md:pb-0 md:pr-8 border-slate-100 dark:border-slate-700">
+                         <img src={profile.photoURL || `https://ui-avatars.com/api/?name=${profile.name}&background=2563eb&color=fff`} className="w-32 h-32 rounded-full shadow-lg"/>
+                         <Badge color="blue" className="text-sm px-4">{profile.role}</Badge>
+                         <p className="text-sm font-bold text-slate-500">{profile.email}</p>
+                      </div>
+                      <div className="flex-1 space-y-5">
+                         <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nombre Completo</label>
+                            <input type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} disabled={profile.role === 'student'} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 disabled:opacity-50 focus:border-brand-500 outline-none"/>
+                         </div>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">F. Nacimiento</label>
+                               <input type="date" value={formData.birthDate} onChange={e=>setFormData({...formData, birthDate: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                            </div>
+                            <div>
+                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Teléfono Móvil</label>
+                               <input type="tel" placeholder="+57 300..." value={formData.phone} onChange={e=>setFormData({...formData, phone: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                            </div>
+                         </div>
+                         <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Campus / Sede Principal</label>
+                            <select value={formData.campus} onChange={e=>setFormData({...formData, campus: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none cursor-pointer">
+                               <option value="Bucaramanga">Bucaramanga</option>
+                               <option value="Bogotá">Bogotá</option>
+                               <option value="San Gil">San Gil</option>
+                               <option value="Virtual">Virtual / E-learning</option>
+                            </select>
+                         </div>
+                         <Button onClick={handleSave} icon={Save} className="w-full sm:w-auto mt-4">Guardar Cambios</Button>
+                      </div>
+                   </div>
+                </Card>
+             </div>
+          );
+        };
+
         const NavItem = ({ icon: Icon, label, active, onClick }) => (
           <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-all ${
             active ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400 shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -631,10 +688,8 @@
                       <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
                     </Card>
                   </div>
-                  {/* INYECCIÓN: Agenda Semanal Estudiante */}
                   <WeeklyAgendaWidget courses={myCourses} />
                 </div>
-                {/* WIDGET CALENDARIO */}
                 <div className="lg:col-span-1">
                   <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
                 </div>
@@ -671,7 +726,6 @@
                       <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => [...(c.students || []), ...(c.studentsEmails || [])])).size}</h3>
                     </Card>
                   </div>
-                  {/* INYECCIÓN: Agenda Semanal Docente */}
                   <WeeklyAgendaWidget courses={myCourses} />
                 </div>
                 <div className="lg:col-span-1">
@@ -736,14 +790,13 @@
           );
         };
 
-        // --- DETALLE DEL CURSO (QR, ASISTENCIA MANUAL, NOTAS) ---
+        // --- DETALLE DEL CURSO ---
         const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db, appId }) => {
           const [topic, setTopic] = useState('');
           const [activeSession, setActiveSession] = useState(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
           const [studentTokenInput, setStudentTokenInput] = useState('');
           const [activeTab, setActiveTab] = useState('attendance'); 
 
-          // LÓGICA QR DINÁMICO CADA 10S
           useEffect(() => {
             let interval;
             if (activeSession && profile.role === 'teacher') {
@@ -759,7 +812,6 @@
             setActiveSession(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
           }, [sessions, course.id]);
 
-          // REAL DB ACTIONS
           const handleStartClass = async () => {
             if (!topic) return showToast("Falta temática", "error");
             await addDoc(PATHS.sessions, {
@@ -792,7 +844,6 @@
             setStudentTokenInput('');
           };
 
-          // INYECCIÓN: ASISTENCIA MANUAL DEL DOCENTE
           const handleToggleManualAttendance = async (student) => {
              const existingRecord = attendances.find(a => a.sessionId === activeSession.id && (a.studentId === student.id || a.studentEmail === student.email));
              try {
@@ -879,7 +930,6 @@
                              </div>
                            </div>
 
-                           {/* INYECCIÓN: LISTADO DE ASISTENCIA MANUAL */}
                            <div className="flex-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-inner max-h-[500px] overflow-y-auto">
                               <h3 className="font-black text-xl mb-4 flex items-center gap-2"><Hand size={20}/> Marcación Manual</h3>
                               <p className="text-xs text-slate-500 mb-4">Marca la asistencia manualmente para aquellos estudiantes sin dispositivo.</p>
@@ -1033,15 +1083,13 @@
         const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId, grades }) => {
           const [adminTab, setAdminTab] = useState('resumen'); 
           
-          // Estados Calendario
           const [eventTitle, setEventTitle] = useState('');
           const [eventDate, setEventDate] = useState('');
           const [eventType, setEventType] = useState('institucional');
 
-          // Estados Configuración Semestre (Inyección Valores 202610 por defecto si no hay en DB)
           const [semStart, setSemStart] = useState('2026-02-02');
           const [semEnd, setSemEnd] = useState('2026-05-29');
-          const [semExcluded, setSemExcluded] = useState('9'); // Semana Santa 2026
+          const [semExcluded, setSemExcluded] = useState('9'); 
           
           const [roleFilter, setRoleFilter] = useState('all');
 
@@ -1055,7 +1103,6 @@
 
           const filteredProfiles = profiles.filter(p => roleFilter === 'all' || p.role === roleFilter);
 
-          // INYECCIÓN: LÓGICA DE CONDENSACIÓN DE HORARIOS EN EXCEL
           const handleProgramacionUpload = async (e) => {
              const file = e.target.files[0];
              if(!file) return;
@@ -1101,7 +1148,6 @@
                                 credits: row['HORAS_CREDITO'] || 3
                             };
                         } else {
-                            // Si el NRC ya existe, condensa el horario si no está duplicado
                             if (!aggregatedCourses[nrcStr].schedule.includes(schedule)) {
                                 aggregatedCourses[nrcStr].schedule += ` | ${schedule}`;
                             }
@@ -1135,7 +1181,6 @@
              reader.readAsBinaryString(file);
           };
 
-          // INGESTA DE INSCRITOS
           const handleInscritosUpload = async (e) => {
              const file = e.target.files[0];
              if(!file) return;
@@ -1217,7 +1262,6 @@
              reader.readAsBinaryString(file);
           };
 
-          // ACCIONES CALENDARIO
           const handleAddEvent = async () => {
              if (!eventTitle || !eventDate) return showToast("Faltan datos del evento", "error");
              try {
@@ -1234,7 +1278,6 @@
              } catch(e) { showToast("Error eliminando", "error"); }
           };
 
-          // INYECCIÓN: Guardar configuración de Semestre
           const handleSaveSemester = async () => {
               try {
                   await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semester'), {
@@ -1275,29 +1318,38 @@
               </div>
 
               {adminTab === 'resumen' && (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
-                   <Card className="border-t-[6px] border-t-brand-500 text-center py-12">
-                      <Calendar size={64} className="mx-auto text-brand-500 mb-6"/>
-                      <h3 className="text-2xl font-black mb-2">Programación Académica</h3>
-                      <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios y docentes.</p>
-                      
-                      <label className="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
-                         Seleccionar Archivo
-                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleProgramacionUpload} />
-                      </label>
-                   </Card>
+                 <>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                      <Card className="border-t-[4px] border-t-blue-500 p-4"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-1">Total Cursos</p><h3 className="text-3xl font-black">{courses.length}</h3></Card>
+                      <Card className="border-t-[4px] border-t-emerald-500 p-4"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-1">Total Estudiantes</p><h3 className="text-3xl font-black">{profiles.filter(p=>p.role==='student').length}</h3></Card>
+                      <Card className="border-t-[4px] border-t-purple-500 p-4"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-1">Total Docentes</p><h3 className="text-3xl font-black">{profiles.filter(p=>p.role==='teacher').length}</h3></Card>
+                      <Card className="border-t-[4px] border-t-brand-500 p-4"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-1">Asistencias Exitosas</p><h3 className="text-3xl font-black text-brand-600">{attendances.length}</h3></Card>
+                   </div>
 
-                   <Card className="border-t-[6px] border-t-emerald-500 text-center py-12">
-                      <FileSpreadsheet size={64} className="mx-auto text-emerald-500 mb-6"/>
-                      <h3 className="text-2xl font-black mb-2">Inscritos en Cursos CDA</h3>
-                      <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>INSCRITOS EN CURSOS CDA...</code> aquí para vincular estudiantes a los NRC correspondientes.</p>
-                      
-                      <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
-                         Seleccionar Archivo
-                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleInscritosUpload} />
-                      </label>
-                   </Card>
-                 </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                     <Card className="border-t-[6px] border-t-brand-500 text-center py-12">
+                        <Calendar size={64} className="mx-auto text-brand-500 mb-6"/>
+                        <h3 className="text-2xl font-black mb-2">Programación Académica</h3>
+                        <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios y docentes.</p>
+                        
+                        <label className="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
+                           Seleccionar Archivo
+                           <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleProgramacionUpload} />
+                        </label>
+                     </Card>
+
+                     <Card className="border-t-[6px] border-t-emerald-500 text-center py-12">
+                        <FileSpreadsheet size={64} className="mx-auto text-emerald-500 mb-6"/>
+                        <h3 className="text-2xl font-black mb-2">Inscritos en Cursos CDA</h3>
+                        <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>INSCRITOS EN CURSOS CDA...</code> aquí para vincular estudiantes a los NRC correspondientes.</p>
+                        
+                        <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
+                           Seleccionar Archivo
+                           <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleInscritosUpload} />
+                        </label>
+                     </Card>
+                   </div>
+                 </>
               )}
 
               {adminTab === 'usuarios' && (
@@ -1325,7 +1377,30 @@
                                   </td>
                                   <td className="py-4 px-4 text-slate-500">{p.email}</td>
                                   <td className="py-4 px-4 font-medium">{p.birthDate ? new Date(p.birthDate).toLocaleDateString() : 'N/A'}</td>
-                                  <td className="py-4 px-4 text-center"><Badge color={getRoleColor(p.role)}>{p.role}</Badge></td>
+                                  <td className="py-4 px-4 text-center">
+                                     <select
+                                        value={p.role}
+                                        onChange={async (e) => {
+                                           try {
+                                              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'profiles', p.id), { role: e.target.value });
+                                              showToast(`Rol de ${p.name} cambiado a ${e.target.value}`, "success");
+                                           } catch(err) {
+                                              showToast("Error al cambiar el rol", "error");
+                                           }
+                                        }}
+                                        className={`text-xs font-bold px-3 py-1.5 rounded-full outline-none cursor-pointer border-none shadow-sm ${
+                                           p.role === 'admin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' :
+                                           p.role === 'director' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' :
+                                           p.role === 'teacher' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
+                                           'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                        }`}
+                                     >
+                                        <option value="student">STUDENT</option>
+                                        <option value="teacher">TEACHER</option>
+                                        <option value="director">DIRECTOR</option>
+                                        <option value="admin">ADMIN</option>
+                                     </select>
+                                  </td>
                                </tr>
                              ))}
                           </tbody>
