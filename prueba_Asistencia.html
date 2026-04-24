@@ -384,7 +384,7 @@
                 {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
                 {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} />}
-                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} />}
+                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} />}
                 {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
               </main>
 
@@ -653,7 +653,8 @@
                               <Badge color="blue" className="inline-block">{course.nrc || course.code}</Badge>
                            </div>
                            <h3 className="font-black text-xl mb-2 group-hover:text-brand-600 transition-colors">{course.name}</h3>
-                           <p className="text-slate-500 font-medium mb-6 flex items-center gap-2"><Clock size={16}/> {course.schedule}</p>
+                           <p className="text-slate-500 font-medium flex items-center gap-2"><Clock size={16}/> {course.schedule}</p>
+                           {(course.building || course.campus) && <p className="text-slate-400 text-xs mb-4 mt-2 flex items-center gap-2"><MapPin size={14}/> {course.campus} - {course.building}</p>}
                         </div>
                         
                         <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
@@ -925,7 +926,7 @@
         };
 
         // --- DASHBOARD ADMIN (INYECCIÓN DE LÓGICA DE USUARIOS, CALENDARIO Y SEMESTRE) ---
-        const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId }) => {
+        const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId, grades }) => {
           const [adminTab, setAdminTab] = useState('resumen'); 
           
           // Estados Calendario
@@ -968,7 +969,7 @@
                   
                   let count = 0;
                   for (let row of data) {
-                     if(row['NRC'] && row['TITULO_PROGRAMACION']) {
+                     if(row['NRC'] && (row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'])) {
                         const nrcStr = String(row['NRC']);
                         const existingCourse = courses.find(c => c.nrc === nrcStr);
                         
@@ -979,14 +980,22 @@
                         if (row['JUE']) scheduleDays.push('Jue');
                         if (row['VIE']) scheduleDays.push('Vie');
                         if (row['SAB']) scheduleDays.push('Sab');
+                        if (row['DOM']) scheduleDays.push('Dom');
                         const schedule = `${scheduleDays.join(', ')} ${row['HORA INI'] || ''}-${row['HORA FIN'] || ''}`;
 
                         const courseData = {
+                            period: row['PERIODO'] || '',
                             nrc: nrcStr,
-                            name: row['TITULO_PROGRAMACION'],
+                            name: row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'] || 'Sin Nombre',
                             code: `${row['MATERIA'] || ''}${row['CURSO'] || ''}`,
                             teacherEmail: (row['EMAIL'] || '').toLowerCase(),
+                            teacherName: `${row['NOMBRE'] || ''} ${row['APELLIDOS'] || ''}`.trim() || row['ID DOCENTE'],
                             schedule: schedule,
+                            campus: row['CAMPUS'] || '',
+                            building: `${row['EDIFICIO'] || ''} ${row['SALON'] || ''}`.trim(),
+                            capacity: row['CAPACIDAD MAXIMA'] || 0,
+                            enrolledCount: row['INSCRITOS'] || 0,
+                            availableSeats: row['CUPOS DISPONIBLES'] || 0,
                             credits: row['HORAS_CREDITO'] || 3
                         };
 
@@ -1004,7 +1013,8 @@
                   }
                   showToast(`Programación Sincronizada: ${count} grupos procesados de manera exitosa.`, "success");
                 } catch(err) {
-                  showToast("Error al procesar el archivo.", "error");
+                  showToast("Error al procesar el archivo de programación.", "error");
+                  console.error(err);
                 }
              };
              reader.readAsBinaryString(file);
@@ -1023,7 +1033,9 @@
                   const wb = XLSX.read(bstr, {type:'binary'});
                   const wsname = wb.SheetNames[0];
                   const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
+                  
                   let coursesMap = {}; 
+                  let gradesToUpdate = [];
 
                   for (let row of data) {
                       if (row['NRC'] && row['MAIL']) {
@@ -1031,9 +1043,27 @@
                           const email = row['MAIL'].toLowerCase();
                           if (!coursesMap[nrcStr]) coursesMap[nrcStr] = new Set();
                           coursesMap[nrcStr].add(email);
+
+                          // Extraer y procesar Calificaciones (NOTA_SH y GNAME)
+                          if (row['GNAME'] && row['NOTA_SH']) {
+                              const notaVal = parseFloat(row['NOTA_SH']);
+                              const corteInfo = row['GNAME'].includes('1') ? 1 : (row['GNAME'].includes('2') ? 2 : 0);
+                              
+                              if (!isNaN(notaVal) && corteInfo !== 0) {
+                                  gradesToUpdate.push({
+                                      nrc: nrcStr,
+                                      email: email,
+                                      corte: corteInfo,
+                                      nota: notaVal,
+                                      gname: row['GNAME']
+                                  });
+                              }
+                          }
                       }
                   }
 
+                  // 1. Sincronizar a los estudiantes dentro de las clases correspondientes (NRC)
+                  let updatedCourses = 0;
                   for (let nrc in coursesMap) {
                       const existingCourse = courses.find(c => c.nrc === nrc);
                       if (existingCourse) {
@@ -1044,11 +1074,32 @@
                           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'courses', existingCourse.id), {
                               studentsEmails: mergedEmails
                           });
+                          updatedCourses++;
                       }
                   }
-                  showToast(`Inscripciones Procesadas: Listas vinculadas en ${Object.keys(coursesMap).length} asignaturas.`, "success");
+
+                  showToast(`Listas de clase vinculadas en ${updatedCourses} asignaturas. Sincronizando notas...`, "info");
+
+                  // 2. Sincronizar las notas subidas (Se guardan cruzando NRC + Email del estudiante)
+                  let notesCount = 0;
+                  for (let g of gradesToUpdate) {
+                      const course = courses.find(c => c.nrc === g.nrc);
+                      if (course) {
+                          const field = 'p1'; // Mapeamos la nota cargada al Parcial 1 temporalmente en el simulador
+                          const existingGrade = grades?.find(gr => gr.courseId === course.id && gr.studentEmail === g.email && gr.corte === g.corte);
+                          if(existingGrade) {
+                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'grades', existingGrade.id), { [field]: g.nota, pName: g.gname });
+                          } else {
+                            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'grades'), { courseId: course.id, studentEmail: g.email, corte: g.corte, [field]: g.nota, pName: g.gname });
+                          }
+                          notesCount++;
+                      }
+                  }
+
+                  showToast(`Éxito total: ${updatedCourses} asignaturas y ${notesCount} calificaciones sincronizadas con la BD.`, "success");
                 } catch(err) {
-                  showToast("Error al procesar inscritos.", "error");
+                  showToast("Error al procesar el cruce de inscritos y notas.", "error");
+                  console.error(err);
                 }
              };
              reader.readAsBinaryString(file);
