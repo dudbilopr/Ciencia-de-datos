@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EduSync | Control Académico UNAB</title>
     
-    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -21,11 +20,8 @@
       }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-    <!-- 2. SheetJS para parseo de Excel REAL en el navegador -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
-    <!-- 3. Import Maps para ES Modules (React + Firebase + Lucide) -->
     <script type="importmap">
       {
         "imports": {
@@ -39,25 +35,20 @@
       }
     </script>
 
-    <!-- 4. Babel para compilar JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <style>
       body { margin: 0; padding: 0; background-color: #f8fafc; overflow-x: hidden; }
       .dark body { background-color: #0f172a; }
       #root { min-height: 100vh; display: flex; flex-direction: column; }
-      
       .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
       .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-      
       ::-webkit-scrollbar { width: 8px; height: 8px; }
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .dark ::-webkit-scrollbar-thumb { background: #475569; }
-
-      /* Animación Data Science */
       .grow-up { animation: growUp 1s ease-out forwards; transform-origin: bottom; }
       @keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
     </style>
@@ -70,17 +61,17 @@
         import { createRoot } from 'react-dom/client';
         import { initializeApp } from 'firebase/app';
         import { getAuth, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-        import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc, getDoc, query, where } from 'firebase/firestore';
+        import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, addDoc, getDoc, query, where, arrayUnion } from 'firebase/firestore';
         import { 
           LayoutDashboard, Users, BookOpen, Settings, QrCode, 
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare
         } from 'lucide-react';
 
         // ============================================================================
-        // 1. FIREBASE CONFIGURATION (PRODUCCIÓN REAL)
+        // 1. FIREBASE CONFIGURATION
         // ============================================================================
         const firebaseConfig = {
           apiKey: "AIzaSyDNmzAMdVD2y-5WSMyanxdo_7zqQoiMINs",
@@ -246,6 +237,8 @@
               const profileRef = doc(PATHS.profiles, loggedUser.uid);
               const profileSnap = await getDoc(profileRef);
               
+              const nowISO = new Date().toISOString();
+
               if (!profileSnap.exists()) {
                 let role = 'student'; 
                 if (email === 'dudbilopr@gmail.com') role = 'admin';
@@ -262,11 +255,17 @@
                   email: email,
                   role: role,
                   photoURL: loggedUser.photoURL,
-                  createdAt: new Date().toISOString(),
+                  createdAt: nowISO,
                   campus: 'Bucaramanga',
                   status: 'Activo',
-                  birthDate: simulatedBirthDate 
+                  birthDate: simulatedBirthDate,
+                  accessLogs: [nowISO] // Inyección: Guardar log de acceso
                 });
+              } else {
+                 // Inyección: Actualizar log de accesos (últimos 5)
+                 const existingLogs = profileSnap.data().accessLogs || [];
+                 const updatedLogs = [nowISO, ...existingLogs].slice(0, 5);
+                 await updateDoc(profileRef, { accessLogs: updatedLogs });
               }
               showToast(`Autenticado como ${loggedUser.displayName}`, 'success');
             } catch (error) {
@@ -442,7 +441,6 @@
           });
           
           const isExcludedWeek = excludedList.includes(rawWeek);
-
           const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0 && !isExcludedWeek;
 
           const upcomingEvents = (events || []).filter(e => {
@@ -567,7 +565,9 @@
              name: profile.name || '',
              birthDate: profile.birthDate || '',
              campus: profile.campus || 'Bucaramanga',
-             phone: profile.phone || ''
+             phone: profile.phone || '',
+             program: profile.program || '', // INYECCIÓN: Seguimiento Demográfico mejorado
+             semesterLevel: profile.semesterLevel || ''
           });
 
           const handleSave = async () => {
@@ -583,7 +583,7 @@
              <div className="max-w-4xl mx-auto slide-up space-y-6">
                 <header className="mb-8">
                   <h1 className="text-4xl font-black">Mi Perfil Institucional</h1>
-                  <p className="text-slate-500 mt-2 font-medium">Actualiza tu información demográfica para uso en el sistema académico.</p>
+                  <p className="text-slate-500 mt-2 font-medium">Actualiza tu información demográfica para uso en el sistema académico y seguimiento.</p>
                 </header>
                 <Card>
                    <div className="flex flex-col md:flex-row gap-8">
@@ -598,6 +598,14 @@
                             <input type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} disabled={profile.role === 'student'} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 disabled:opacity-50 focus:border-brand-500 outline-none"/>
                          </div>
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Programa Académico</label>
+                               <input type="text" placeholder="Ej: Ingeniería de Sistemas" value={formData.program} onChange={e=>setFormData({...formData, program: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                            </div>
+                            <div>
+                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Semestre Actual</label>
+                               <input type="number" placeholder="Ej: 5" min="1" max="12" value={formData.semesterLevel} onChange={e=>setFormData({...formData, semesterLevel: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                            </div>
                             <div>
                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">F. Nacimiento</label>
                                <input type="date" value={formData.birthDate} onChange={e=>setFormData({...formData, birthDate: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
@@ -616,7 +624,7 @@
                                <option value="Virtual">Virtual / E-learning</option>
                             </select>
                          </div>
-                         <Button onClick={handleSave} icon={Save} className="w-full sm:w-auto mt-4">Guardar Cambios</Button>
+                         <Button onClick={handleSave} icon={Save} className="w-full sm:w-auto mt-4">Guardar Cambios Demográficos</Button>
                       </div>
                    </div>
                 </Card>
@@ -646,6 +654,9 @@
           const stats = useMemo(() => {
             let expected = 0, attended = 0;
             myCourses.forEach(course => {
+              // INYECCIÓN: Si el estudiante fue marcado como retirado en este curso, no se le cuenta la asistencia en su Dashboard general
+              if(course.withdrawnStudents && course.withdrawnStudents.includes(profile.email)) return;
+
               const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
               expected += courseSessions.length;
               const courseAttends = attendances.filter(a => a.courseId === course.id && a.studentId === profile.id);
@@ -765,12 +776,14 @@
                   {displayCourses.map(course => {
                     const teacher = profiles.find(p => p.id === course.teacherId || p.email === course.teacherEmail);
                     const totalEstudiantes = new Set([...(course.students || []), ...(course.studentsEmails || [])]).size;
+                    const retirados = (course.withdrawnStudents || []).length; // INYECCIÓN: Retirados
 
                     return (
                       <Card key={course.id} onClick={() => onSelectCourse(course)} className="hover:border-brand-400 group flex flex-col justify-between">
                         <div>
                            <div className="flex justify-between items-start mb-4">
                               <Badge color="blue" className="inline-block">{course.nrc || course.code}</Badge>
+                              {course.lineaTematica && <Badge color="purple">{course.lineaTematica}</Badge>}
                            </div>
                            <h3 className="font-black text-xl mb-2 group-hover:text-brand-600 transition-colors">{course.name}</h3>
                            <p className="text-slate-500 font-medium flex items-center gap-2"><Clock size={16}/> {course.schedule}</p>
@@ -781,7 +794,10 @@
                           {(profile.role === 'student' || profile.role === 'admin' || profile.role === 'director') && teacher ? (
                             <span className="text-xs font-bold text-slate-500 truncate mr-2">Prof. {teacher.name.split(' ')[0]}</span>
                           ) : (
-                            <span className="text-xs font-bold text-slate-500">{totalEstudiantes} Estudiantes</span>
+                            <span className="text-xs font-bold text-slate-500 flex flex-col">
+                               <span>{totalEstudiantes - retirados} Activos</span>
+                               {retirados > 0 && <span className="text-rose-500">{retirados} Retirados</span>}
+                            </span>
                           )}
                           <span className="text-brand-600 font-black text-sm group-hover:translate-x-1 transition-transform whitespace-nowrap">Ir a Curso &rarr;</span>
                         </div>
@@ -806,16 +822,21 @@
           const [pastDate, setPastDate] = useState('');
           const [editingSession, setEditingSession] = useState(null);
 
+          const [qrRotationSpeed, setQrRotationSpeed] = useState(5); // INYECCIÓN: Velocidad de rotación configurable (5s, 10s, 20s, 30s)
+          
+          // INYECCIÓN: Estado para Tutorías
+          const [tutoringData, setTutoringData] = useState({ date: '', time: '', link: '', topic: '' });
+
           useEffect(() => {
             let interval;
             if (activeSession && profile.role === 'teacher') {
               interval = setInterval(async () => {
                 const newToken = Math.random().toString(36).substring(2, 8).toUpperCase();
                 await updateDoc(doc(PATHS.sessions, activeSession.id), { currentToken: newToken });
-              }, 10000); 
+              }, qrRotationSpeed * 1000); 
             }
             return () => clearInterval(interval);
-          }, [activeSession, profile.role]);
+          }, [activeSession, profile.role, qrRotationSpeed]);
 
           useEffect(() => {
             setActiveSession(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
@@ -835,7 +856,8 @@
             if(dictada) {
               const presentes = attendances.filter(a => a.sessionId === activeSession.id).length;
               const totalEst = new Set([...(course.students || []), ...(course.studentsEmails || [])]).size;
-              const ausentes = totalEst - presentes;
+              const retirados = (course.withdrawnStudents || []).length;
+              const ausentes = (totalEst - retirados) - presentes;
               if (ausentes > 0) showToast(`Email enviado a ${ausentes} ausentes.`, "info");
               showToast("Clase finalizada.", "success");
             } else {
@@ -909,7 +931,48 @@
              } catch(e) { showToast("Error al guardar", "error"); }
           };
 
+          // INYECCIÓN: Lógica para marcar estudiantes como retirados
+          const handleToggleWithdrawal = async (studentEmail) => {
+             const withdrawn = course.withdrawnStudents || [];
+             const isWithdrawn = withdrawn.includes(studentEmail);
+             
+             try {
+                let newWithdrawn;
+                if(isWithdrawn) {
+                   newWithdrawn = withdrawn.filter(e => e !== studentEmail);
+                } else {
+                   newWithdrawn = [...withdrawn, studentEmail];
+                }
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'courses', course.id), { withdrawnStudents: newWithdrawn });
+                showToast(`Estudiante marcado como ${isWithdrawn ? 'Activo' : 'Cancelado'}`, "info");
+             } catch (e) {
+                showToast("Error al actualizar estado del estudiante", "error");
+             }
+          };
+
+          // INYECCIÓN: Lógica de creación de tutoría
+          const handleCreateTutoring = async () => {
+             if(!tutoringData.date || !tutoringData.time || !tutoringData.topic) return showToast("Faltan datos de la tutoría", "error");
+             try {
+                await addDoc(PATHS.tutorings, {
+                   courseId: course.id, teacherId: profile.id, ...tutoringData, status: 'scheduled', registeredStudents: []
+                });
+                showToast("Tutoría programada", "success");
+                setTutoringData({ date: '', time: '', link: '', topic: '' });
+             } catch(e) {
+                showToast("Error al programar tutoría", "error");
+             }
+          };
+
+          const handleRegisterForTutoring = async (tutoringId) => {
+             try {
+                await updateDoc(doc(PATHS.tutorings, tutoringId), { registeredStudents: arrayUnion(profile.email) });
+                showToast("Registrado exitosamente a la tutoría", "success");
+             } catch(e) { showToast("Error al registrarse", "error"); }
+          }
+
           const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
+          const courseTutorings = tutorings.filter(t => t.courseId === course.id);
           
           const enrolledStudentsData = Array.from(new Set([...(course.studentsEmails || [])])).map(email => {
               const prof = profiles.find(p => p.email === email);
@@ -917,7 +980,6 @@
           });
           const totalEstudiantes = enrolledStudentsData.length;
 
-          // INYECCIÓN: Lógica para agrupar sesiones por semana
           const startDateStr = semesterConfig?.startDate || '2026-02-02';
           const semesterStart = new Date(startDateStr + 'T00:00:00');
           const now = new Date();
@@ -929,23 +991,34 @@
           if (currentWeek < 1) currentWeek = 1;
           if (currentWeek > 18) currentWeek = 18; 
 
+          // Cálculos para Data Science de Materia
+          const courseExpectedAttends = courseSessions.length * totalEstudiantes;
+          const courseActualAttends = attendances.filter(a => a.courseId === course.id).length;
+          const courseAttendanceRate = courseExpectedAttends === 0 ? 100 : Math.round((courseActualAttends / courseExpectedAttends) * 100);
+
           return (
             <div className="max-w-6xl mx-auto slide-up space-y-6">
               <button onClick={onBack} className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-4 hover:text-brand-600">&larr; Regresar</button>
               
               <header className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700">
                 <Badge color="purple" className="mb-4">{course.nrc || course.code}</Badge>
+                {course.lineaTematica && <Badge color="indigo" className="mb-4 ml-2">{course.lineaTematica}</Badge>}
                 <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-4">{course.name}</h1>
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4">
                   <Badge color="gray"><Clock size={14} className="inline mr-1"/> {course.schedule}</Badge>
-                  <Badge color="blue"><Users size={14} className="inline mr-1"/> {totalEstudiantes} Estudiantes</Badge>
+                  <Badge color="blue"><Users size={14} className="inline mr-1"/> {totalEstudiantes} Inscritos</Badge>
+                  {(course.withdrawnStudents || []).length > 0 && <Badge color="red"><UserMinus size={14} className="inline mr-1"/> {(course.withdrawnStudents || []).length} Retirados</Badge>}
                 </div>
               </header>
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
                 <button onClick={()=>setActiveTab('attendance')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='attendance' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><QrCode className="inline mr-2" size={18}/> Asistencia</button>
                 <button onClick={()=>setActiveTab('grades')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='grades' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><ClipboardList className="inline mr-2" size={18}/> Calificaciones</button>
-                <button onClick={()=>setActiveTab('tutoring')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='tutoring' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Users className="inline mr-2" size={18}/> Tutorías</button>
+                <button onClick={()=>setActiveTab('tutoring')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='tutoring' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="inline mr-2" size={18}/> Tutorías</button>
+                {/* INYECCIÓN: DATA SCIENCE POR MATERIA */}
+                {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') && (
+                    <button onClick={()=>setActiveTab('analytics')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='analytics' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Activity className="inline mr-2" size={18}/> Analítica del Curso</button>
+                )}
               </div>
 
               {/* TAB ASISTENCIA */}
@@ -957,11 +1030,19 @@
                         <div className="flex flex-col gap-6">
                            <div>
                                <h2 className="text-2xl font-black mb-4">Activar Control Híbrido (QR / Manual)</h2>
-                               <input type="text" placeholder="Temática de la sesión actual" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl mb-4 mr-4 bg-slate-50 dark:bg-slate-700"/>
+                               <div className="flex flex-col md:flex-row gap-4 mb-4">
+                                  <input type="text" placeholder="Temática de la sesión actual" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 font-bold"/>
+                                  {/* INYECCIÓN: Configurar tiempo del QR */}
+                                  <select value={qrRotationSpeed} onChange={e=>setQrRotationSpeed(Number(e.target.value))} className="px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 font-bold text-slate-500 cursor-pointer">
+                                      <option value={5}>QR rota cada 5 seg</option>
+                                      <option value={10}>QR rota cada 10 seg</option>
+                                      <option value={20}>QR rota cada 20 seg</option>
+                                      <option value={30}>QR rota cada 30 seg</option>
+                                  </select>
+                               </div>
                                <Button onClick={handleStartClass}>Iniciar Clase de Hoy</Button>
                            </div>
                            
-                           {/* Botón y Formulario para Sesiones Pasadas */}
                            <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
                                {!isAddingPast ? (
                                    <button onClick={() => setIsAddingPast(true)} className="text-sm font-bold text-brand-600 hover:text-brand-700 transition-colors flex items-center gap-2"><Clock size={16}/> + Registrar clase de semanas pasadas</button>
@@ -986,10 +1067,10 @@
                              <Badge color="green" className="mb-4 animate-pulse">Clase en Progreso</Badge>
                              <h2 className="text-3xl font-black mb-6">{activeSession.topic}</h2>
                              
-                             <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl text-center border-2 border-slate-200 flex flex-col items-center justify-center mb-6">
-                               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.currentToken}`} alt="QR" className="mx-auto rounded-xl mb-4"/>
-                               <span className="text-4xl font-black font-mono tracking-[0.2em]">{activeSession.currentToken}</span>
-                               <p className="text-brand-600 font-bold text-xs mt-2 uppercase">Rotando cada 10s</p>
+                             <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl text-center border-2 border-slate-200 flex flex-col items-center justify-center mb-6 relative overflow-hidden">
+                               <div className="absolute top-2 right-2"><Badge color="purple"><Timer size={10} className="inline mr-1"/>{qrRotationSpeed}s</Badge></div>
+                               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.currentToken}`} alt="QR" className="mx-auto rounded-xl mb-4 relative z-10"/>
+                               <span className="text-4xl font-black font-mono tracking-[0.2em] relative z-10">{activeSession.currentToken}</span>
                              </div>
 
                              <div className="flex gap-4">
@@ -1002,7 +1083,7 @@
                               <h3 className="font-black text-xl mb-4 flex items-center gap-2"><Hand size={20}/> Marcación Manual</h3>
                               <p className="text-xs text-slate-500 mb-4">Marca la asistencia manualmente para aquellos estudiantes sin dispositivo.</p>
                               <div className="space-y-2">
-                                 {enrolledStudentsData.map(st => {
+                                 {enrolledStudentsData.filter(st => !(course.withdrawnStudents || []).includes(st.email)).map(st => {
                                     const isPresent = attendances.some(a => a.sessionId === activeSession.id && (a.studentId === st.id || a.studentEmail === st.email));
                                     return (
                                        <div key={st.email} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
@@ -1026,7 +1107,6 @@
                     </Card>
                   )}
 
-                  {/* PANEL DE EDICIÓN DE ASISTENCIA HISTÓRICA */}
                   {profile.role === 'teacher' && editingSession && (
                       <Card className="border-t-[6px] border-t-amber-500 shadow-xl shadow-amber-500/10">
                           <div className="flex justify-between items-center mb-6 border-b pb-4 border-slate-200 dark:border-slate-700">
@@ -1039,7 +1119,7 @@
                           </div>
                           
                           <div className="max-h-[400px] overflow-y-auto space-y-2 pr-2">
-                             {enrolledStudentsData.map(st => {
+                             {enrolledStudentsData.filter(st => !(course.withdrawnStudents || []).includes(st.email)).map(st => {
                                 const isPresent = attendances.some(a => a.sessionId === editingSession.id && (a.studentId === st.id || a.studentEmail === st.email));
                                 return (
                                    <div key={st.email} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
@@ -1077,7 +1157,6 @@
                     </Card>
                   )}
 
-                  {/* INYECCIÓN: HISTORIAL DE CLASES AGRUPADO POR SEMANA */}
                   <Card>
                     <h3 className="font-black text-xl mb-6">Historial de Clases por Semanas</h3>
                     {[...Array(currentWeek)].map((_, i) => {
@@ -1143,28 +1222,35 @@
               {/* TAB CALIFICACIONES */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
-                  {profile.role === 'teacher' || profile.role === 'admin' ? (
+                  {profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director' ? (
                      <Card>
-                       <h3 className="font-black text-xl mb-6">Gestionar Calificaciones (Corte 1)</h3>
+                       <h3 className="font-black text-xl mb-6">Gestionar Calificaciones y Matrículas</h3>
                        <div className="overflow-x-auto">
                          <table className="w-full text-left">
-                            <thead><tr className="border-b-2 text-slate-400 text-xs uppercase tracking-widest"><th className="pb-3">Estudiante</th><th className="pb-3">Correo</th><th className="pb-3">Parcial 1</th><th className="pb-3">Parcial 2</th></tr></thead>
+                            <thead><tr className="border-b-2 text-slate-400 text-xs uppercase tracking-widest"><th className="pb-3">Estudiante</th><th className="pb-3">Correo</th><th className="pb-3 text-center">Estado</th><th className="pb-3 text-center">C1: Parcial 1</th><th className="pb-3 text-center">C1: Parcial 2</th></tr></thead>
                             <tbody>
                               {enrolledStudentsData.map(student => {
                                 const sGrade = grades.find(g => g.courseId === course.id && g.studentEmail === student.email && g.corte === 1) || {};
+                                const isWithdrawn = (course.withdrawnStudents || []).includes(student.email);
+                                
                                 return (
-                                  <tr key={student.email} className="border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                  <tr key={student.email} className={`border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isWithdrawn ? 'opacity-50' : ''}`}>
                                     <td className="py-4 font-bold text-sm text-slate-800 dark:text-white">{student.name}</td>
                                     <td className="py-4 text-xs text-slate-500">{student.email}</td>
-                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p1', e.target.value)} disabled={profile.role !== 'teacher'} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
-                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p2', e.target.value)} disabled={profile.role !== 'teacher'} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
+                                    <td className="py-4 text-center">
+                                        <button onClick={() => handleToggleWithdrawal(student.email)} disabled={profile.role === 'student'} className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${isWithdrawn ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                            {isWithdrawn ? 'Retirado / Cancelado' : 'Activo'}
+                                        </button>
+                                    </td>
+                                    <td className="py-4 text-center"><input type="number" step="0.1" defaultValue={sGrade.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p1', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-16 px-2 py-1 border rounded bg-slate-50 dark:bg-slate-700 text-center"/></td>
+                                    <td className="py-4 text-center"><input type="number" step="0.1" defaultValue={sGrade.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p2', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-16 px-2 py-1 border rounded bg-slate-50 dark:bg-slate-700 text-center"/></td>
                                   </tr>
                                 )
                               })}
                             </tbody>
                          </table>
                        </div>
-                       {profile.role === 'teacher' && <p className="text-xs text-slate-400 mt-4">Los cambios se guardan automáticamente en Firestore al salir del campo (onBlur).</p>}
+                       {profile.role === 'teacher' && <p className="text-xs text-slate-400 mt-4">Los cambios se guardan automáticamente en Firestore al salir del campo.</p>}
                      </Card>
                   ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1182,32 +1268,107 @@
                             )
                          })()}
                        </Card>
-                       <Card className="opacity-50 pointer-events-none">
-                         <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 2 (60%)</h3>
-                         <div className="text-center font-bold py-10">No habilitado</div>
-                       </Card>
                      </div>
                   )}
                 </div>
               )}
 
-              {/* TAB TUTORIAS */}
+              {/* TAB TUTORIAS (NUEVO) */}
               {activeTab === 'tutoring' && (
-                <Card className="mt-6 text-center py-20">
-                   <Users size={64} className="mx-auto text-slate-300 mb-6"/>
-                   <h3 className="text-2xl font-black">Módulo de Tutorías</h3>
-                   <p className="font-medium text-slate-500 mt-2">La base de datos está lista para recibir `tutorings` en Firestore.</p>
-                </Card>
+                <div className="space-y-6 mt-6">
+                   {profile.role === 'teacher' && (
+                       <Card className="border-t-[4px] border-t-purple-500">
+                          <h3 className="font-black text-xl mb-4">Programar Nueva Tutoría</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                              <input type="date" value={tutoringData.date} onChange={e=>setTutoringData({...tutoringData, date:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50"/>
+                              <input type="time" value={tutoringData.time} onChange={e=>setTutoringData({...tutoringData, time:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50"/>
+                              <input type="text" placeholder="Temática a reforzar" value={tutoringData.topic} onChange={e=>setTutoringData({...tutoringData, topic:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50 md:col-span-2"/>
+                              <input type="text" placeholder="Lugar / Enlace Teams" value={tutoringData.link} onChange={e=>setTutoringData({...tutoringData, link:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50 md:col-span-4"/>
+                          </div>
+                          <Button onClick={handleCreateTutoring} variant="primary">Agendar Tutoría</Button>
+                       </Card>
+                   )}
+
+                   <Card>
+                      <h3 className="font-black text-xl mb-6 flex items-center gap-2"><MessageSquare className="text-purple-500"/> Agenda de Tutorías del Curso</h3>
+                      {courseTutorings.length === 0 ? (
+                          <p className="text-slate-500 italic text-center py-10">No hay tutorías programadas para este grupo.</p>
+                      ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {courseTutorings.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => {
+                                  const isRegistered = (t.registeredStudents || []).includes(profile.email);
+                                  return (
+                                      <div key={t.id} className="border border-slate-200 dark:border-slate-700 p-5 rounded-2xl bg-white dark:bg-slate-800">
+                                          <div className="flex justify-between items-start mb-2">
+                                              <Badge color="purple">{new Date(t.date).toLocaleDateString()} - {t.time}</Badge>
+                                              <span className="text-xs font-bold text-slate-500">{(t.registeredStudents||[]).length} Registrados</span>
+                                          </div>
+                                          <h4 className="font-black text-lg mb-1">{t.topic}</h4>
+                                          <p className="text-sm text-slate-500 mb-4 flex items-center gap-1"><MapPin size={12}/> {t.link || 'Sin ubicación'}</p>
+                                          
+                                          {profile.role === 'student' && (
+                                              <Button onClick={()=>handleRegisterForTutoring(t.id)} disabled={isRegistered} variant={isRegistered ? 'secondary' : 'outline'} className="w-full text-xs py-2">
+                                                  {isRegistered ? '✅ Ya estás registrado' : 'Reservar Cupo'}
+                                              </Button>
+                                          )}
+                                      </div>
+                                  )
+                              })}
+                          </div>
+                      )}
+                   </Card>
+                </div>
+              )}
+
+              {/* INYECCIÓN: DATA SCIENCE POR MATERIA */}
+              {activeTab === 'analytics' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 slide-up">
+                      <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-emerald-500">
+                          <h3 className="font-black text-xl mb-2">Asistencia Global del Grupo</h3>
+                          <div className="text-6xl font-black text-emerald-500 my-4">{courseAttendanceRate}%</div>
+                          <p className="text-sm text-slate-500 font-bold">Asistencias vs Expectativa Total</p>
+                      </Card>
+                      <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-rose-500">
+                          <h3 className="font-black text-xl mb-2">Tasa de Cancelación / Retiro</h3>
+                          <div className="text-6xl font-black text-rose-500 my-4">
+                              {totalEstudiantes > 0 ? Math.round(((course.withdrawnStudents || []).length / totalEstudiantes) * 100) : 0}%
+                          </div>
+                          <p className="text-sm text-slate-500 font-bold">Estudiantes que han abandonado el curso</p>
+                      </Card>
+                      
+                      <Card className="md:col-span-2">
+                          <h3 className="font-black text-xl mb-6">Métricas de Rendimiento (Corte 1)</h3>
+                          <div className="flex flex-col md:flex-row gap-8 items-center justify-center">
+                              <div className="w-full md:w-1/2">
+                                 <p className="text-sm font-bold text-slate-500 text-center mb-4 uppercase tracking-widest">Distribución de Notas (Parcial 1)</p>
+                                 <div className="flex items-end justify-between h-40 gap-2 mb-2 border-b border-slate-200 dark:border-slate-700 pb-2">
+                                     {[0, 1, 2, 3, 4].map(range => {
+                                         const count = grades.filter(g => g.courseId === course.id && g.corte === 1 && g.p1 >= range && g.p1 < range + 1).length;
+                                         const max = Math.max(...[0,1,2,3,4].map(r => grades.filter(g => g.courseId === course.id && g.corte === 1 && g.p1 >= r && g.p1 < r + 1).length), 1);
+                                         return (
+                                            <div key={range} className="relative flex flex-col justify-end w-full h-full group">
+                                               <div className="bg-brand-500 rounded-t transition-all grow-up" style={{height: `${(count / max) * 100}%`}}></div>
+                                               <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-xs font-black px-2 py-1 rounded">{count}</div>
+                                            </div>
+                                         )
+                                     })}
+                                 </div>
+                                 <div className="flex justify-between text-slate-400 text-xs font-bold">
+                                    <span>0.0-1.0</span><span>1.0-2.0</span><span>2.0-3.0</span><span>3.0-4.0</span><span>4.0-5.0</span>
+                                 </div>
+                              </div>
+                          </div>
+                      </Card>
+                  </div>
               )}
             </div>
           );
         };
 
-        // --- DASHBOARD DIRECTOR / ANALÍTICA (ACTUALIZADO CON CIENCIA DE DATOS) ---
+        // --- DASHBOARD DIRECTOR / ANALÍTICA (DATA SCIENCE DASHBOARD) ---
         const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [] }) => {
           
-          // Data Science Metrics: Histograma de notas P1
-          const gradeDistrib = [0,0,0,0,0]; // 0-1, 1-2, 2-3, 3-4, 4-5
+          const gradeDistrib = [0,0,0,0,0]; 
           grades.forEach(g => {
              if (g.p1 !== undefined) {
                  if (g.p1 < 1.0) gradeDistrib[0]++;
@@ -1219,7 +1380,6 @@
           });
           const maxDistrib = Math.max(...gradeDistrib, 1);
 
-          // Cálculo Real de Riesgo y Deserción Institucional
           let globalExpected = 0;
           let globalAttended = attendances.length;
           courses.forEach(c => {
@@ -1243,7 +1403,6 @@
                         <Card className="border-t-4 border-rose-500"><p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Tasa Global Asistencia</p><h3 className={`text-5xl font-black ${globalAttendanceRate < 80 ? 'text-rose-600' : 'text-emerald-600'}`}>{globalAttendanceRate}%</h3></Card>
                     </div>
                     
-                    {/* INYECCIÓN: DATA SCIENCE GRAPHICS */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                        <Card className="bg-slate-900 dark:bg-slate-950 border-none shadow-2xl">
                            <h3 className="text-white font-black text-xl mb-6 flex items-center gap-2"><BarChart3 size={20} className="text-brand-400"/> Histograma de Notas (Corte 1)</h3>
@@ -1261,8 +1420,8 @@
                        </Card>
 
                        <Card className="flex flex-col justify-center border-t-4 border-brand-500">
-                           <h3 className="font-black text-xl mb-4 flex items-center gap-2"><PieChart size={20} className="text-brand-500"/> Riesgo de Deserción</h3>
-                           <p className="text-sm text-slate-500 mb-6">Proporción de inasistencias en base a la capacidad total institucional esperada.</p>
+                           <h3 className="font-black text-xl mb-4 flex items-center gap-2"><PieChart size={20} className="text-brand-500"/> Riesgo de Deserción Institucional</h3>
+                           <p className="text-sm text-slate-500 mb-6">Proporción de inasistencias en base a la capacidad total esperada de todos los cursos.</p>
                            <div className="w-full bg-slate-100 dark:bg-slate-700 h-6 rounded-full overflow-hidden flex shadow-inner">
                                <div className="bg-emerald-500 h-full" style={{width: `${globalAttendanceRate}%`}}></div>
                                <div className="bg-rose-500 h-full" style={{width: `${100 - globalAttendanceRate}%`}}></div>
@@ -1333,6 +1492,10 @@
                         if (row['SAB']) scheduleDays.push('Sab');
                         if (row['DOM']) scheduleDays.push('Dom');
                         const schedule = `${scheduleDays.join(', ')} ${row['HORA INI'] || ''}-${row['HORA FIN'] || ''}`;
+                        
+                        // INYECCIÓN: Extraer Núcleo / Línea Temática del código de la materia (Ej: ADMI16010 -> ADMI)
+                        const rawMateria = row['MATERIA'] || '';
+                        const lineaTematica = rawMateria.replace(/[^A-Za-z]/g, '');
 
                         if (!aggregatedCourses[nrcStr]) {
                             aggregatedCourses[nrcStr] = {
@@ -1340,6 +1503,7 @@
                                 nrc: nrcStr,
                                 name: row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'] || 'Sin Nombre',
                                 code: `${row['MATERIA'] || ''}${row['CURSO'] || ''}`,
+                                lineaTematica: lineaTematica,
                                 teacherEmail: (row['EMAIL'] || '').toLowerCase(),
                                 teacherName: `${row['NOMBRE'] || ''} ${row['APELLIDOS'] || ''}`.trim() || row['ID DOCENTE'],
                                 schedule: schedule,
@@ -1375,7 +1539,7 @@
                       count++;
                   }
                   
-                  showToast(`Programación Sincronizada: ${count} grupos condensados exitosamente.`, "success");
+                  showToast(`Programación Sincronizada: ${count} grupos listos con Núcleos Temáticos.`, "success");
                 } catch(err) {
                   showToast("Error al procesar el archivo de programación.", "error");
                   console.error(err);
@@ -1515,7 +1679,7 @@
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
                 <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Ingesta (Excel)</button>
-                <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Usuarios</button>
+                <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Usuarios y Logs</button>
                 <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><PartyPopper className="inline mr-2" size={18}/> Eventos</button>
                 <button onClick={()=>setAdminTab('semestre')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='semestre' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Sliders className="inline mr-2" size={18}/> Configuración Semestre</button>
               </div>
@@ -1533,7 +1697,7 @@
                      <Card className="border-t-[6px] border-t-brand-500 text-center py-12">
                         <Calendar size={64} className="mx-auto text-brand-500 mb-6"/>
                         <h3 className="text-2xl font-black mb-2">Programación Académica</h3>
-                        <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios y docentes.</p>
+                        <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios, núcleos y docentes.</p>
                         
                         <label className="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
                            Seleccionar Archivo
@@ -1557,7 +1721,7 @@
 
               {adminTab === 'usuarios' && (
                  <Card className="mt-6">
-                    <h3 className="font-black text-2xl mb-6">Auditoría de Roles y Usuarios</h3>
+                    <h3 className="font-black text-2xl mb-6">Auditoría de Roles y Logs de Accesos</h3>
                     
                     <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                        <button onClick={()=>setRoleFilter('all')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='all' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Todos ({profiles.length})</button>
@@ -1569,17 +1733,22 @@
 
                     <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
                        <table className="w-full text-left text-sm">
-                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-tl-2xl">Nombre</th><th className="py-4 px-4">Email Institucional</th><th className="py-4 px-4">Cumpleaños</th><th className="py-4 px-4 text-center rounded-tr-2xl">Rol Activo</th></tr></thead>
+                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-tl-2xl">Nombre Completo</th><th className="py-4 px-4">Email / Logs de Acceso</th><th className="py-4 px-4 text-center rounded-tr-2xl">Rol Activo</th></tr></thead>
                           <tbody>
                              {filteredProfiles.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-slate-400 font-bold">No hay usuarios en esta categoría.</td></tr>}
                              {filteredProfiles.map(p => (
                                <tr key={p.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                   <td className="py-4 px-4 font-bold text-slate-800 dark:text-white flex items-center gap-3">
-                                     <img src={p.photoURL || `https://ui-avatars.com/api/?name=${p.name}&background=eee`} className="w-8 h-8 rounded-full" alt="avatar"/>
-                                     {p.name}
+                                     <img src={p.photoURL || `https://ui-avatars.com/api/?name=${p.name}&background=eee`} className="w-10 h-10 rounded-full shadow-sm" alt="avatar"/>
+                                     <div>
+                                        <p>{p.name}</p>
+                                        <p className="text-[10px] text-slate-500 font-medium">{p.campus || 'Sin Campus'}</p>
+                                     </div>
                                   </td>
-                                  <td className="py-4 px-4 text-slate-500">{p.email}</td>
-                                  <td className="py-4 px-4 font-medium">{p.birthDate ? new Date(p.birthDate).toLocaleDateString() : 'N/A'}</td>
+                                  <td className="py-4 px-4">
+                                     <span className="text-slate-700 dark:text-slate-300 font-bold block">{p.email}</span>
+                                     <span className="text-[10px] text-brand-600 font-bold mt-1 block">Último acceso: {p.accessLogs && p.accessLogs.length > 0 ? new Date(p.accessLogs[0]).toLocaleString() : 'N/A'}</span>
+                                  </td>
                                   <td className="py-4 px-4 text-center">
                                      <select
                                         value={p.role}
@@ -1598,10 +1767,10 @@
                                            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                                         }`}
                                      >
-                                        <option value="student">STUDENT</option>
-                                        <option value="teacher">TEACHER</option>
+                                        <option value="student">ESTUDIANTE</option>
+                                        <option value="teacher">DOCENTE</option>
                                         <option value="director">DIRECTOR</option>
-                                        <option value="admin">ADMIN</option>
+                                        <option value="admin">ADMINISTRADOR</option>
                                      </select>
                                   </td>
                                </tr>
