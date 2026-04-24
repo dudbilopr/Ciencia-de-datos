@@ -72,7 +72,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders
         } from 'lucide-react';
 
         // ============================================================================
@@ -101,7 +101,7 @@
           attendance: collection(db, 'artifacts', appId, 'public', 'data', 'attendance'),
           grades: collection(db, 'artifacts', appId, 'public', 'data', 'grades'),
           tutorings: collection(db, 'artifacts', appId, 'public', 'data', 'tutorings'),
-          events: collection(db, 'artifacts', appId, 'public', 'data', 'events'), // Nueva colección para calendario
+          events: collection(db, 'artifacts', appId, 'public', 'data', 'events'), 
         };
 
         // ============================================================================
@@ -157,6 +157,7 @@
           const [grades, setGrades] = useState([]);
           const [tutorings, setTutorings] = useState([]);
           const [events, setEvents] = useState([]);
+          const [semesterConfig, setSemesterConfig] = useState({}); // INYECCIÓN: Estado para el semestre
           
           const [loading, setLoading] = useState(true);
           const [darkMode, setDarkMode] = useState(false);
@@ -201,6 +202,10 @@
               onSnapshot(PATHS.grades, s => setGrades(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.tutorings, s => setTutorings(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.events, s => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
+              // INYECCIÓN: Sincronizar configuración del semestre
+              onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semester'), s => {
+                 if (s.exists()) setSemesterConfig(s.data());
+              }, errHandler),
             ];
             setTimeout(() => setLoading(false), 800);
             return () => unsubs.forEach(u => u());
@@ -241,7 +246,7 @@
                 else if (email.includes('director') || email.includes('coordinador')) role = 'director';
                 else if (email.includes('docente') || email.includes('profesor')) role = 'teacher';
 
-                // Simular fecha de nacimiento para el demo del widget (fecha random en el año)
+                // Simular fecha de nacimiento para el demo del widget
                 const today = new Date();
                 const randomMonth = Math.floor(Math.random() * 12);
                 const randomDay = Math.floor(Math.random() * 28) + 1;
@@ -341,9 +346,8 @@
                   
                   <NavItem icon={LayoutDashboard} label="Dashboard General" active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setSelectedCourse(null);}} />
                   
-                  {(currentUserProfile.role === 'teacher' || currentUserProfile.role === 'student') && (
-                    <NavItem icon={BookOpen} label="Asignaturas y Notas" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
-                  )}
+                  {/* INYECCIÓN: Asignaturas visibles también para Admin y Director */}
+                  <NavItem icon={BookOpen} label="Asignaturas y Horarios" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
                   
                   {(currentUserProfile.role === 'director' || currentUserProfile.role === 'admin') && (
                     <NavItem icon={PieChart} label="Analítica Institucional" active={currentView === 'analytics'} onClick={() => setCurrentView('analytics')} />
@@ -377,11 +381,11 @@
 
               {/* MAIN */}
               <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
-                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} />}
+                {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
                 {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} />}
-                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} />}
-                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} />}
+                {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} />}
+                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
               </main>
 
             </div>
@@ -389,21 +393,36 @@
         }
 
         // ============================================================================
-        // WIDGET: CALENDARIO INSTITUCIONAL (Motor de Fechas)
+        // WIDGET: CALENDARIO INSTITUCIONAL (Motor de Fechas con Configuración)
         // ============================================================================
-        const AcademicCalendarWidget = ({ events, profiles }) => {
+        const AcademicCalendarWidget = ({ events = [], profiles = [], semesterConfig = {} }) => {
           const now = new Date();
-          // Simular que el semestre empezó hace X semanas en base a la fecha actual. 
-          const semesterStart = new Date(now.getFullYear(), 1, 1); // Febrero 1 del año actual
-          const diffTime = Math.abs(now - semesterStart);
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-          const currentWeek = Math.ceil(diffDays / 7) || 1;
           
-          // Alerta parciales cada 4 semanas
-          const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0;
+          // INYECCIÓN: Configuración del calendario desde Base de Datos
+          const startDateStr = semesterConfig?.startDate || `${now.getFullYear()}-02-01`;
+          const semesterStart = new Date(startDateStr + 'T00:00:00');
+          
+          const diffTime = now.getTime() - semesterStart.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          let rawWeek = Math.ceil(diffDays / 7) || 1;
+          if (rawWeek < 1) rawWeek = 1;
+          
+          // Descontar semanas excluidas
+          const excludedStr = semesterConfig?.excludedWeeks || '';
+          const excludedList = excludedStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+          
+          let currentWeek = rawWeek;
+          excludedList.forEach(w => {
+             if (rawWeek > w) currentWeek--;
+          });
+          
+          const isExcludedWeek = excludedList.includes(rawWeek);
 
-          // Eventos próximos (próximos 30 días)
-          const upcomingEvents = events.filter(e => {
+          // Alerta parciales cada 4 semanas lectivas
+          const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0 && !isExcludedWeek;
+
+          // Eventos próximos (próximos 30 días). INYECCIÓN: filter con array fallback seguro
+          const upcomingEvents = (events || []).filter(e => {
             const eDate = new Date(e.date);
             const timeDiff = eDate - now;
             return timeDiff >= 0 && timeDiff <= (30 * 24 * 60 * 60 * 1000);
@@ -411,7 +430,7 @@
 
           // Cumpleaños próximos (mes actual)
           const currentMonth = now.getMonth() + 1;
-          const upcomingBirthdays = profiles.filter(p => {
+          const upcomingBirthdays = (profiles || []).filter(p => {
              if (!p.birthDate) return false;
              const [y, m, d] = p.birthDate.split('-');
              return parseInt(m) === currentMonth && parseInt(d) >= now.getDate();
@@ -427,7 +446,7 @@
                 <p className="text-brand-600 dark:text-brand-400 font-bold text-sm uppercase tracking-widest mb-1">Transcurriendo</p>
                 <div className="flex items-center justify-between">
                   <h4 className="text-4xl font-black text-slate-900 dark:text-white">Semana {currentWeek}</h4>
-                  <Badge color="blue">16 Semanas Totales</Badge>
+                  {isExcludedWeek ? <Badge color="yellow">Semana Inactiva</Badge> : <Badge color="blue">Periodo Lectivo</Badge>}
                 </div>
               </div>
 
@@ -496,16 +515,16 @@
           </button>
         );
 
-        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles }) => {
-          if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles}/>;
-          if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles}/>;
-          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} />;
+        const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles, semesterConfig }) => {
+          if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
+          if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
+          // INYECCIÓN: Director y Admin ven la vista analítica global al entrar al dashboard
+          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />;
           return null;
         };
 
         // --- DASHBOARD ESTUDIANTE ---
-        const StudentDashboard = ({ profile, courses, sessions, attendances, events, profiles }) => {
-          // MODIFICACIÓN SEGURA: Buscar coincidencias también por correo para vinculación real del CSV
+        const StudentDashboard = ({ profile, courses, sessions, attendances, events, profiles, semesterConfig }) => {
           const myCourses = courses.filter(c => (c.students || []).includes(profile.id) || (c.studentsEmails || []).includes(profile.email));
           
           const stats = useMemo(() => {
@@ -517,7 +536,7 @@
               attended += courseAttends.length;
             });
             const percent = expected === 0 ? 100 : Math.round((attended / expected) * 100);
-            const risk = percent <= 80; // Regla de negocio: Riesgo académico
+            const risk = percent <= 80; 
             return { expected, attended, percent, risk, absents: expected - attended };
           }, [myCourses, sessions, attendances, profile.id]);
 
@@ -558,7 +577,7 @@
                 </div>
                 {/* WIDGET CALENDARIO */}
                 <div className="lg:col-span-1">
-                  <AcademicCalendarWidget events={events} profiles={profiles} />
+                  <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
                 </div>
               </div>
             </div>
@@ -566,8 +585,7 @@
         };
 
         // --- DASHBOARD DOCENTE ---
-        const TeacherDashboard = ({ profile, courses, sessions, tutorings, events, profiles }) => {
-          // MODIFICACIÓN SEGURA: Vinculación real CSV por correo
+        const TeacherDashboard = ({ profile, courses, sessions, tutorings, events, profiles, semesterConfig }) => {
           const myCourses = courses.filter(c => c.teacherId === profile.id || c.teacherEmail === profile.email);
           const mySessions = sessions.filter(s => s.teacherId === profile.id && s.completed);
 
@@ -594,7 +612,7 @@
                   </Card>
                 </div>
                 <div className="lg:col-span-1">
-                   <AcademicCalendarWidget events={events} profiles={profiles} />
+                   <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
                 </div>
               </div>
             </div>
@@ -603,7 +621,7 @@
 
         // --- LISTA DE CURSOS ---
         const CoursesListView = ({ profile, courses, profiles, onSelectCourse }) => {
-          // MODIFICACIÓN SEGURA: Filtros adaptados a vinculación por correo
+          // INYECCIÓN: Si es Admin/Director ve todos los cursos (courses completo)
           const displayCourses = profile.role === 'teacher' 
              ? courses.filter(c => c.teacherId === profile.id || c.teacherEmail === profile.email) 
              : profile.role === 'student' 
@@ -613,7 +631,7 @@
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
-                <h1 className="text-4xl font-black">Asignaturas</h1>
+                <h1 className="text-4xl font-black">Asignaturas y Horarios</h1>
               </header>
               
               {displayCourses.length === 0 ? (
@@ -639,7 +657,7 @@
                         </div>
                         
                         <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                          {profile.role === 'student' && teacher ? (
+                          {(profile.role === 'student' || profile.role === 'admin' || profile.role === 'director') && teacher ? (
                             <span className="text-xs font-bold text-slate-500 truncate mr-2">Prof. {teacher.name.split(' ')[0]}</span>
                           ) : (
                             <span className="text-xs font-bold text-slate-500">{totalEstudiantes} Estudiantes</span>
@@ -711,9 +729,8 @@
             setStudentTokenInput('');
           };
 
-          // GUARDADO REAL DE NOTAS (Solo Docente)
+          // GUARDADO REAL DE NOTAS (Solo Docente o Admin si fuera necesario)
           const handleSaveGrade = async (studentEmail, corte, field, value) => {
-             // En el CSV de inscritos usamos el correo para vincular a los estudiantes. 
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              const numVal = parseFloat(value);
              if(isNaN(numVal) || numVal < 0 || numVal > 5) return showToast("Nota debe ser entre 0.0 y 5.0", "error");
@@ -730,7 +747,6 @@
 
           const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
           
-          // Construcción segura del listado de estudiantes (Fusionando registros creados por CSV + logueos reales)
           const enrolledStudentsData = Array.from(new Set([...(course.studentsEmails || [])])).map(email => {
               const prof = profiles.find(p => p.email === email);
               return prof || { id: email, email: email, name: email.split('@')[0].toUpperCase(), role: 'student' };
@@ -814,7 +830,7 @@
                             const isPresent = attendances.some(a => a.sessionId === s.id && a.studentId === profile.id);
                             return (
                               <tr key={s.id} className="border-b border-slate-100"><td className="py-4 font-bold">{new Date(s.date).toLocaleDateString()}</td><td className="py-4 font-bold text-slate-800 dark:text-white">{s.topic}</td><td className="py-4 text-right">
-                                {profile.role === 'teacher' ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
+                                {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
                               </td></tr>
                             )
                           })}
@@ -827,7 +843,7 @@
               {/* TAB CALIFICACIONES (REAL) */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
-                  {profile.role === 'teacher' ? (
+                  {profile.role === 'teacher' || profile.role === 'admin' ? (
                      <Card>
                        <h3 className="font-black text-xl mb-6">Gestionar Calificaciones (Corte 1)</h3>
                        <div className="overflow-x-auto">
@@ -840,15 +856,15 @@
                                   <tr key={student.email} className="border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     <td className="py-4 font-bold text-sm text-slate-800 dark:text-white">{student.name}</td>
                                     <td className="py-4 text-xs text-slate-500">{student.email}</td>
-                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p1', e.target.value)} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
-                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p2', e.target.value)} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
+                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p1', e.target.value)} disabled={profile.role !== 'teacher'} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
+                                    <td className="py-4"><input type="number" step="0.1" defaultValue={sGrade.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p2', e.target.value)} disabled={profile.role !== 'teacher'} className="w-20 px-3 py-2 border rounded-lg bg-slate-50 dark:bg-slate-700"/></td>
                                   </tr>
                                 )
                               })}
                             </tbody>
                          </table>
                        </div>
-                       <p className="text-xs text-slate-400 mt-4">Los cambios se guardan automáticamente en Firestore al salir del campo (onBlur).</p>
+                       {profile.role === 'teacher' && <p className="text-xs text-slate-400 mt-4">Los cambios se guardan automáticamente en Firestore al salir del campo (onBlur).</p>}
                      </Card>
                   ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -888,7 +904,7 @@
         };
 
         // --- DASHBOARD DIRECTOR / ANALÍTICA ---
-        const DirectorView = ({ courses, sessions, attendances, events, profiles }) => {
+        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig }) => {
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
@@ -901,21 +917,42 @@
                     <Card className="border-t-4 border-brand-500"><p className="text-slate-500 font-bold uppercase text-xs mb-2">Asistencias registradas</p><h3 className="text-5xl font-black text-brand-600">{attendances.length}</h3></Card>
                  </div>
                  <div className="lg:col-span-1">
-                    <AcademicCalendarWidget events={events} profiles={profiles} />
+                    <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
                  </div>
               </div>
             </div>
           );
         };
 
-        // --- DASHBOARD ADMIN (INYECCIÓN DE LÓGICA DE PARSEO REAL DE ARCHIVOS ADJUNTOS) ---
-        const AdminView = ({ showToast, profiles, courses, db, events }) => {
+        // --- DASHBOARD ADMIN (INYECCIÓN DE LÓGICA DE USUARIOS, CALENDARIO Y SEMESTRE) ---
+        const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId }) => {
           const [adminTab, setAdminTab] = useState('resumen'); 
+          
+          // Estados Calendario
           const [eventTitle, setEventTitle] = useState('');
           const [eventDate, setEventDate] = useState('');
           const [eventType, setEventType] = useState('institucional');
 
-          // INYECCIÓN DE MEJORA: PARSEO DE "Programacion_academica..."
+          // INYECCIÓN: Estados Configuración Semestre
+          const [semStart, setSemStart] = useState('');
+          const [semEnd, setSemEnd] = useState('');
+          const [semExcluded, setSemExcluded] = useState('');
+          
+          // INYECCIÓN: Filtro de Usuarios
+          const [roleFilter, setRoleFilter] = useState('all');
+
+          // Inicializar datos del semestre cuando lleguen
+          useEffect(() => {
+              if (semesterConfig) {
+                  setSemStart(semesterConfig.startDate || '');
+                  setSemEnd(semesterConfig.endDate || '');
+                  setSemExcluded(semesterConfig.excludedWeeks || '');
+              }
+          }, [semesterConfig]);
+
+          const filteredProfiles = profiles.filter(p => roleFilter === 'all' || p.role === roleFilter);
+
+          // INGESTA DE PROGRAMACIÓN
           const handleProgramacionUpload = async (e) => {
              const file = e.target.files[0];
              if(!file) return;
@@ -931,12 +968,10 @@
                   
                   let count = 0;
                   for (let row of data) {
-                     // Verifica que tenga la estructura del archivo adjunto
                      if(row['NRC'] && row['TITULO_PROGRAMACION']) {
                         const nrcStr = String(row['NRC']);
                         const existingCourse = courses.find(c => c.nrc === nrcStr);
                         
-                        // Combinar días de clase en el horario
                         let scheduleDays = [];
                         if (row['LUN']) scheduleDays.push('Lun');
                         if (row['MAR']) scheduleDays.push('Mar');
@@ -969,14 +1004,13 @@
                   }
                   showToast(`Programación Sincronizada: ${count} grupos procesados de manera exitosa.`, "success");
                 } catch(err) {
-                  showToast("Error de compatibilidad al procesar el archivo.", "error");
-                  console.error(err);
+                  showToast("Error al procesar el archivo.", "error");
                 }
              };
              reader.readAsBinaryString(file);
           };
 
-          // INYECCIÓN DE MEJORA: PARSEO DE "INSCRITOS EN CURSOS CDA..."
+          // INGESTA DE INSCRITOS
           const handleInscritosUpload = async (e) => {
              const file = e.target.files[0];
              if(!file) return;
@@ -989,32 +1023,17 @@
                   const wb = XLSX.read(bstr, {type:'binary'});
                   const wsname = wb.SheetNames[0];
                   const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
-
-                  let coursesMap = {}; // nrc -> Set de emails
+                  let coursesMap = {}; 
 
                   for (let row of data) {
-                      // Verifica que tenga la estructura del archivo adjunto
                       if (row['NRC'] && row['MAIL']) {
                           const nrcStr = String(row['NRC']);
                           const email = row['MAIL'].toLowerCase();
-
                           if (!coursesMap[nrcStr]) coursesMap[nrcStr] = new Set();
                           coursesMap[nrcStr].add(email);
-
-                          // Registrar Notas (Demo Piloto con NOTA_1 y NOTA_SH de la hoja de Excel)
-                          if (row['GNAME'] && row['NOTA_SH']) {
-                              const notaVal = parseFloat(row['NOTA_SH']);
-                              const corteInfo = row['GNAME'].includes('1') ? 1 : (row['GNAME'].includes('2') ? 2 : 0);
-                              
-                              if (!isNaN(notaVal) && corteInfo !== 0) {
-                                  // Simularíamos el update en la base de datos de notas grades (omitido en iteración batch directa para proteger el simulador de saturación, pero listo para ser procesado)
-                                  // Este es el punto exacto donde conectaría el parseo si quieres procesar 1000 notas de golpe en Producción (Firebase Batch).
-                              }
-                          }
                       }
                   }
 
-                  // Actualizar los cursos de Firebase agregándoles los estudiantes del Excel
                   for (let nrc in coursesMap) {
                       const existingCourse = courses.find(c => c.nrc === nrc);
                       if (existingCourse) {
@@ -1027,21 +1046,20 @@
                           });
                       }
                   }
-
-                  showToast(`Inscripciones Procesadas: Se vincularon listas en ${Object.keys(coursesMap).length} asignaturas.`, "success");
+                  showToast(`Inscripciones Procesadas: Listas vinculadas en ${Object.keys(coursesMap).length} asignaturas.`, "success");
                 } catch(err) {
-                  showToast("Error de compatibilidad al procesar inscritos.", "error");
-                  console.error(err);
+                  showToast("Error al procesar inscritos.", "error");
                 }
              };
              reader.readAsBinaryString(file);
           };
 
+          // ACCIONES CALENDARIO
           const handleAddEvent = async () => {
              if (!eventTitle || !eventDate) return showToast("Faltan datos del evento", "error");
              try {
                 await addDoc(PATHS.events, { title: eventTitle, date: eventDate, type: eventType });
-                showToast("Evento guardado correctamente", "success");
+                showToast("Evento guardado", "success");
                 setEventTitle(''); setEventDate('');
              } catch(e) { showToast("Error guardando evento", "error"); }
           };
@@ -1051,7 +1069,21 @@
                 await deleteDoc(doc(PATHS.events, id));
                 showToast("Evento eliminado", "info");
              } catch(e) { showToast("Error eliminando", "error"); }
-          }
+          };
+
+          // INYECCIÓN: Guardar configuración de Semestre
+          const handleSaveSemester = async () => {
+              try {
+                  await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semester'), {
+                      startDate: semStart, 
+                      endDate: semEnd, 
+                      excludedWeeks: semExcluded
+                  });
+                  showToast("Configuración del semestre actualizada", "success");
+              } catch(e) {
+                  showToast("Error al guardar configuración", "error");
+              }
+          };
 
           const getRoleColor = (role) => {
             switch(role) {
@@ -1073,9 +1105,11 @@
               </header>
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
-                <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Ingesta de Archivos Excel/CSV</button>
-                <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Gestión Usuarios</button>
-                <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><CalendarDays className="inline mr-2" size={18}/> Calendario Institucional</button>
+                <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Ingesta (Excel)</button>
+                <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Usuarios</button>
+                <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><PartyPopper className="inline mr-2" size={18}/> Eventos</button>
+                {/* INYECCIÓN: Nueva Pestaña */}
+                <button onClick={()=>setAdminTab('semestre')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='semestre' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Sliders className="inline mr-2" size={18}/> Configuración Semestre</button>
               </div>
 
               {adminTab === 'resumen' && (
@@ -1083,7 +1117,7 @@
                    <Card className="border-t-[6px] border-t-brand-500 text-center py-12">
                       <Calendar size={64} className="mx-auto text-brand-500 mb-6"/>
                       <h3 className="text-2xl font-black mb-2">Programación Académica</h3>
-                      <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios y docentes responsables.</p>
+                      <p className="text-slate-500 mb-6 font-medium text-sm">Carga el archivo <code>Programacion_academica...</code> aquí para estructurar la sábana de grupos, NRCs, horarios y docentes.</p>
                       
                       <label className="cursor-pointer bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-8 rounded-2xl shadow-lg transition-colors inline-block">
                          Seleccionar Archivo
@@ -1107,11 +1141,22 @@
               {adminTab === 'usuarios' && (
                  <Card className="mt-6">
                     <h3 className="font-black text-2xl mb-6">Auditoría de Roles y Usuarios</h3>
-                    <div className="overflow-x-auto">
+                    
+                    {/* INYECCIÓN: Botones de Filtrado de Usuarios */}
+                    <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                       <button onClick={()=>setRoleFilter('all')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='all' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Todos ({profiles.length})</button>
+                       <button onClick={()=>setRoleFilter('student')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='student' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Estudiantes</button>
+                       <button onClick={()=>setRoleFilter('teacher')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='teacher' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Docentes</button>
+                       <button onClick={()=>setRoleFilter('director')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='director' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Directores</button>
+                       <button onClick={()=>setRoleFilter('admin')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='admin' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Admin</button>
+                    </div>
+
+                    <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
                        <table className="w-full text-left text-sm">
-                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-l-xl">Nombre</th><th className="py-4 px-4">Email Institucional</th><th className="py-4 px-4">Cumpleaños</th><th className="py-4 px-4 text-center rounded-r-xl">Rol Activo</th></tr></thead>
+                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-tl-2xl">Nombre</th><th className="py-4 px-4">Email Institucional</th><th className="py-4 px-4">Cumpleaños</th><th className="py-4 px-4 text-center rounded-tr-2xl">Rol Activo</th></tr></thead>
                           <tbody>
-                             {profiles.map(p => (
+                             {filteredProfiles.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-slate-400 font-bold">No hay usuarios en esta categoría.</td></tr>}
+                             {filteredProfiles.map(p => (
                                <tr key={p.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                   <td className="py-4 px-4 font-bold text-slate-800 dark:text-white flex items-center gap-3">
                                      <img src={p.photoURL || `https://ui-avatars.com/api/?name=${p.name}&background=eee`} className="w-8 h-8 rounded-full" alt="avatar"/>
@@ -1131,11 +1176,11 @@
               {adminTab === 'calendario' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
                     <Card>
-                       <h3 className="font-black text-2xl mb-6">Agregar Fecha / Celebración</h3>
+                       <h3 className="font-black text-2xl mb-6">Agregar Celebración</h3>
                        <div className="space-y-4">
                           <div>
                              <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Nombre del Evento</label>
-                             <input type="text" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} placeholder="Ej: UNAB Fest, Semana Santa" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700"/>
+                             <input type="text" value={eventTitle} onChange={e=>setEventTitle(e.target.value)} placeholder="Ej: UNAB Fest, Semana de Inducción" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700"/>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                              <div>
@@ -1146,7 +1191,7 @@
                                 <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Tipo</label>
                                 <select value={eventType} onChange={e=>setEventType(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700">
                                    <option value="institucional">Institucional</option>
-                                   <option value="festivo">Festivo</option>
+                                   <option value="festivo">Festivo (Día libre)</option>
                                 </select>
                              </div>
                           </div>
@@ -1176,6 +1221,33 @@
                        )}
                     </Card>
                  </div>
+              )}
+
+              {/* INYECCIÓN: NUEVA PESTAÑA PARA CONFIGURACIÓN DEL SEMESTRE */}
+              {adminTab === 'semestre' && (
+                 <Card className="mt-6 border-t-[6px] border-t-brand-500">
+                    <h3 className="font-black text-2xl mb-2 flex items-center gap-3"><Sliders className="text-brand-500"/> Configuración del Semestre Académico</h3>
+                    <p className="text-slate-500 mb-8 font-medium">Define los límites del periodo lectivo. Las Alertas de Parciales y los recuentos de asistencia se basan en estos parámetros.</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                       <div>
+                          <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Fecha de Inicio</label>
+                          <input type="date" value={semStart} onChange={e=>setSemStart(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                       </div>
+                       <div>
+                          <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Fecha de Fin (Opcional)</label>
+                          <input type="date" value={semEnd} onChange={e=>setSemEnd(e.target.value)} className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                       </div>
+                    </div>
+                    
+                    <div className="mb-8">
+                       <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Semanas Excluidas (Semanas sin carga académica)</label>
+                       <input type="text" value={semExcluded} onChange={e=>setSemExcluded(e.target.value)} placeholder="Ej: 8, 14 (Separadas por comas)" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                       <p className="text-xs text-slate-400 mt-2 font-bold">Ingresa el número de la semana calendario que no debe contarse (ej. Semana Santa = 8). El motor ajustará el cálculo para que las semanas "activas" sean transparentes.</p>
+                    </div>
+                    
+                    <Button onClick={handleSaveSemester} className="w-full md:w-auto" icon={Save}>Guardar Configuración en DB</Button>
+                 </Card>
               )}
             </div>
           );
