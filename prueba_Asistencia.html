@@ -72,7 +72,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand
         } from 'lucide-react';
 
         // ============================================================================
@@ -135,7 +135,8 @@
             primary: "bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/30 dark:shadow-none",
             secondary: "bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white",
             danger: "bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/30 dark:shadow-none",
-            outline: "border-2 border-brand-600 text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/20"
+            outline: "border-2 border-brand-600 text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/20",
+            success: "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/30 dark:shadow-none",
           };
           return (
             <button onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${className}`}>
@@ -157,7 +158,7 @@
           const [grades, setGrades] = useState([]);
           const [tutorings, setTutorings] = useState([]);
           const [events, setEvents] = useState([]);
-          const [semesterConfig, setSemesterConfig] = useState({}); // INYECCIÓN: Estado para el semestre
+          const [semesterConfig, setSemesterConfig] = useState({}); 
           
           const [loading, setLoading] = useState(true);
           const [darkMode, setDarkMode] = useState(false);
@@ -165,6 +166,7 @@
 
           const [currentView, setCurrentView] = useState('dashboard');
           const [selectedCourse, setSelectedCourse] = useState(null);
+          const [roleOverride, setRoleOverride] = useState(null); // INYECCIÓN: Simulador de roles para Admin
 
           // INIT & AUTH LISTENER
           useEffect(() => {
@@ -202,7 +204,6 @@
               onSnapshot(PATHS.grades, s => setGrades(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.tutorings, s => setTutorings(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
               onSnapshot(PATHS.events, s => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), errHandler),
-              // INYECCIÓN: Sincronizar configuración del semestre
               onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'semester'), s => {
                  if (s.exists()) setSemesterConfig(s.data());
               }, errHandler),
@@ -221,7 +222,9 @@
             setTimeout(() => setToast(null), 4000);
           };
 
-          const currentUserProfile = profiles.find(p => p.id === user?.uid);
+          // INYECCIÓN: Si hay override, fusiona el perfil.
+          const realProfile = profiles.find(p => p.id === user?.uid);
+          const currentUserProfile = realProfile ? { ...realProfile, role: roleOverride || realProfile.role } : null;
 
           const handleGoogleLogin = async () => {
             try {
@@ -246,7 +249,6 @@
                 else if (email.includes('director') || email.includes('coordinador')) role = 'director';
                 else if (email.includes('docente') || email.includes('profesor')) role = 'teacher';
 
-                // Simular fecha de nacimiento para el demo del widget
                 const today = new Date();
                 const randomMonth = Math.floor(Math.random() * 12);
                 const randomDay = Math.floor(Math.random() * 28) + 1;
@@ -273,6 +275,7 @@
           const handleLogout = async () => {
             await signOut(auth);
             setCurrentView('dashboard');
+            setRoleOverride(null);
           };
 
           // ============================================================================
@@ -346,7 +349,6 @@
                   
                   <NavItem icon={LayoutDashboard} label="Dashboard General" active={currentView === 'dashboard'} onClick={() => {setCurrentView('dashboard'); setSelectedCourse(null);}} />
                   
-                  {/* INYECCIÓN: Asignaturas visibles también para Admin y Director */}
                   <NavItem icon={BookOpen} label="Asignaturas y Horarios" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
                   
                   {(currentUserProfile.role === 'director' || currentUserProfile.role === 'admin') && (
@@ -359,6 +361,24 @@
                 </nav>
 
                 <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800">
+                  
+                  {/* INYECCIÓN: SIMULADOR DE ROLES (SOLO PARA ADMIN ORIGINAL) */}
+                  {realProfile?.role === 'admin' && (
+                    <div className="mb-6 bg-purple-100 dark:bg-purple-900/30 p-3 rounded-xl border border-purple-200 dark:border-purple-700/50">
+                      <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest block mb-1">Simulador de Roles</label>
+                      <select 
+                        value={roleOverride || 'admin'} 
+                        onChange={(e) => { setRoleOverride(e.target.value === 'admin' ? null : e.target.value); setCurrentView('dashboard'); }}
+                        className="w-full bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 p-2 rounded-lg border-none outline-none shadow-sm cursor-pointer"
+                      >
+                        <option value="admin">Administrador (Normal)</option>
+                        <option value="student">Test: Modo Estudiante</option>
+                        <option value="teacher">Test: Modo Docente</option>
+                        <option value="director">Test: Modo Director</option>
+                      </select>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-6 px-2">
                     <span className="text-sm font-bold text-slate-500 flex items-center gap-2"><Moon size={16}/> Dark Mode</span>
                     <button onClick={() => setDarkMode(!darkMode)} className={`w-14 h-7 rounded-full p-1 transition-colors ${darkMode ? 'bg-brand-600' : 'bg-slate-300'}`}>
@@ -383,7 +403,7 @@
               <main className="flex-1 p-6 md:p-10 overflow-y-auto w-full">
                 {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
-                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} />}
+                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} />}
                 {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} />}
                 {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />}
               </main>
@@ -393,22 +413,26 @@
         }
 
         // ============================================================================
-        // WIDGET: CALENDARIO INSTITUCIONAL (Motor de Fechas con Configuración)
+        // WIDGET: CALENDARIO INSTITUCIONAL (Hardcode 202610 por defecto)
         // ============================================================================
         const AcademicCalendarWidget = ({ events = [], profiles = [], semesterConfig = {} }) => {
           const now = new Date();
           
-          // INYECCIÓN: Configuración del calendario desde Base de Datos
-          const startDateStr = semesterConfig?.startDate || `${now.getFullYear()}-02-01`;
+          // INYECCIÓN: Configuración del Semestre 202610
+          const startDateStr = semesterConfig?.startDate || '2026-02-02';
           const semesterStart = new Date(startDateStr + 'T00:00:00');
           
-          const diffTime = now.getTime() - semesterStart.getTime();
+          // Para visualizar la demostración hoy, calculamos la diferencia, 
+          // Si estamos antes de 2026, simulamos que la fecha actual es relativa al inicio del semestre.
+          const simulatedNow = now < semesterStart ? new Date('2026-03-01T00:00:00') : now;
+
+          const diffTime = simulatedNow.getTime() - semesterStart.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
           let rawWeek = Math.ceil(diffDays / 7) || 1;
           if (rawWeek < 1) rawWeek = 1;
           
-          // Descontar semanas excluidas
-          const excludedStr = semesterConfig?.excludedWeeks || '';
+          // Descontar semanas excluidas (Semana Santa es la semana 9 desde Feb 2)
+          const excludedStr = semesterConfig?.excludedWeeks || '9';
           const excludedList = excludedStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
           
           let currentWeek = rawWeek;
@@ -421,27 +445,25 @@
           // Alerta parciales cada 4 semanas lectivas
           const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0 && !isExcludedWeek;
 
-          // Eventos próximos (próximos 30 días). INYECCIÓN: filter con array fallback seguro
+          // Eventos próximos
           const upcomingEvents = (events || []).filter(e => {
             const eDate = new Date(e.date);
-            const timeDiff = eDate - now;
+            const timeDiff = eDate - simulatedNow;
             return timeDiff >= 0 && timeDiff <= (30 * 24 * 60 * 60 * 1000);
           }).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 3);
 
-          // Cumpleaños próximos (mes actual)
-          const currentMonth = now.getMonth() + 1;
+          const currentMonth = simulatedNow.getMonth() + 1;
           const upcomingBirthdays = (profiles || []).filter(p => {
              if (!p.birthDate) return false;
              const [y, m, d] = p.birthDate.split('-');
-             return parseInt(m) === currentMonth && parseInt(d) >= now.getDate();
+             return parseInt(m) === currentMonth && parseInt(d) >= simulatedNow.getDate();
           }).sort((a,b) => parseInt(a.birthDate.split('-')[2]) - parseInt(b.birthDate.split('-')[2])).slice(0, 3);
 
           return (
             <Card className="flex flex-col h-full bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 border-t-4 border-t-brand-500 relative overflow-hidden">
               <div className="absolute top-[-20px] right-[-20px] opacity-5"><CalendarDays size={150}/></div>
-              <h3 className="font-black text-2xl mb-6 flex items-center gap-3 relative z-10"><CalendarDays className="text-brand-500"/> Calendario Académico</h3>
+              <h3 className="font-black text-2xl mb-6 flex items-center gap-3 relative z-10"><CalendarDays className="text-brand-500"/> Calendario 202610</h3>
               
-              {/* Semana Actual */}
               <div className="bg-brand-50 dark:bg-brand-900/30 p-5 rounded-2xl mb-6 relative z-10">
                 <p className="text-brand-600 dark:text-brand-400 font-bold text-sm uppercase tracking-widest mb-1">Transcurriendo</p>
                 <div className="flex items-center justify-between">
@@ -450,18 +472,16 @@
                 </div>
               </div>
 
-              {/* Alerta Parciales */}
               {isPartialWeek && (
                 <div className="bg-rose-500 text-white p-4 rounded-2xl mb-6 flex items-center gap-4 animate-pulse shadow-lg shadow-rose-500/30 relative z-10">
                   <Bell size={28} />
                   <div>
                     <h4 className="font-black text-lg">¡Alerta de Parciales!</h4>
-                    <p className="text-sm font-medium text-rose-100">Evaluaciones de corte programadas para esta semana.</p>
+                    <p className="text-sm font-medium text-rose-100">Evaluaciones de corte esta semana.</p>
                   </div>
                 </div>
               )}
 
-              {/* Eventos y Festivos */}
               <div className="mb-6 relative z-10">
                 <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-3 flex items-center gap-2"><PartyPopper size={14}/> Celebraciones Institucionales</h4>
                 {upcomingEvents.length === 0 ? (
@@ -478,7 +498,6 @@
                 )}
               </div>
 
-              {/* Cumpleaños */}
               <div className="relative z-10 mt-auto pt-6 border-t border-slate-200 dark:border-slate-700">
                 <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-3 flex items-center gap-2"><Gift size={14}/> Cumpleaños este Mes</h4>
                 {upcomingBirthdays.length === 0 ? (
@@ -503,6 +522,43 @@
           );
         };
 
+        // ============================================================================
+        // INYECCIÓN: WIDGET DE AGENDA SEMANAL INTERACTIVA
+        // ============================================================================
+        const WeeklyAgendaWidget = ({ courses }) => {
+          const days = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
+          
+          return (
+            <Card className="mt-6 overflow-hidden">
+               <h3 className="font-black text-2xl mb-6 flex items-center gap-2"><Calendar className="text-brand-500"/> Mi Horario Semanal</h3>
+               <div className="overflow-x-auto">
+                 <div className="min-w-[800px] grid grid-cols-6 gap-4">
+                    {days.map(day => (
+                       <div key={day} className="flex flex-col">
+                          <div className="bg-slate-100 dark:bg-slate-700/50 p-3 rounded-t-xl text-center font-black text-slate-500 uppercase tracking-widest text-sm border-b-2 border-brand-500">
+                             {day}
+                          </div>
+                          <div className="bg-slate-50 dark:bg-slate-800/30 p-3 rounded-b-xl flex-1 flex flex-col gap-3 min-h-[200px]">
+                             {courses.filter(c => c.schedule && c.schedule.includes(day)).map((c, i) => {
+                                // Extracción simple de la hora para visualización
+                                const timeMatch = c.schedule.match(/\d{2}:\d{2}-\d{2}:\d{2}/);
+                                const time = timeMatch ? timeMatch[0] : '';
+                                return (
+                                   <div key={i} className="bg-white dark:bg-slate-700 p-3 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm border-l-4 border-l-brand-500">
+                                      <p className="text-xs font-black text-slate-800 dark:text-white leading-tight mb-1">{c.name}</p>
+                                      <p className="text-[10px] font-bold text-brand-600 flex items-center gap-1"><Clock size={10}/> {time}</p>
+                                      {c.building && <p className="text-[10px] text-slate-500 mt-1 truncate">{c.building}</p>}
+                                   </div>
+                                )
+                             })}
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+               </div>
+            </Card>
+          )
+        };
 
         // ============================================================================
         // 5. MODULAR VIEWS
@@ -518,7 +574,6 @@
         const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles, semesterConfig }) => {
           if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
           if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
-          // INYECCIÓN: Director y Admin ven la vista analítica global al entrar al dashboard
           if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} />;
           return null;
         };
@@ -558,22 +613,26 @@
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card className="flex flex-col items-center justify-center py-10 text-center col-span-1 md:col-span-2">
-                    <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
-                    <h3 className="text-5xl font-black">{stats.percent}%</h3>
-                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
-                  </Card>
-                  <Card className="flex flex-col items-center justify-center py-10 text-center">
-                    <BookOpen size={64} className="text-brand-500 mb-4"/>
-                    <h3 className="text-5xl font-black">{myCourses.length}</h3>
-                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
-                  </Card>
-                  <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
-                    <AlertTriangle size={64} className="text-rose-500 mb-4"/>
-                    <h3 className="text-5xl font-black">{stats.absents}</h3>
-                    <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
-                  </Card>
+                <div className="lg:col-span-2 flex flex-col gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Card className="flex flex-col items-center justify-center py-10 text-center col-span-1 md:col-span-2">
+                      <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
+                      <h3 className="text-5xl font-black">{stats.percent}%</h3>
+                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
+                    </Card>
+                    <Card className="flex flex-col items-center justify-center py-10 text-center">
+                      <BookOpen size={64} className="text-brand-500 mb-4"/>
+                      <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
+                    </Card>
+                    <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
+                      <AlertTriangle size={64} className="text-rose-500 mb-4"/>
+                      <h3 className="text-5xl font-black">{stats.absents}</h3>
+                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
+                    </Card>
+                  </div>
+                  {/* INYECCIÓN: Agenda Semanal Estudiante */}
+                  <WeeklyAgendaWidget courses={myCourses} />
                 </div>
                 {/* WIDGET CALENDARIO */}
                 <div className="lg:col-span-1">
@@ -597,19 +656,23 @@
               </header>
 
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                  <Card className="border-t-4 border-brand-500">
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Cursos Asignados</p>
-                    <h3 className="text-5xl font-black">{myCourses.length}</h3>
-                  </Card>
-                  <Card className="border-t-4 border-emerald-500">
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Clases Dictadas</p>
-                    <h3 className="text-5xl font-black">{mySessions.length}</h3>
-                  </Card>
-                  <Card className="border-t-4 border-purple-500">
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Estudiantes Totales</p>
-                    <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => [...(c.students || []), ...(c.studentsEmails || [])])).size}</h3>
-                  </Card>
+                <div className="lg:col-span-3 flex flex-col gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <Card className="border-t-4 border-brand-500">
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Cursos Asignados</p>
+                      <h3 className="text-5xl font-black">{myCourses.length}</h3>
+                    </Card>
+                    <Card className="border-t-4 border-emerald-500">
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Clases Dictadas</p>
+                      <h3 className="text-5xl font-black">{mySessions.length}</h3>
+                    </Card>
+                    <Card className="border-t-4 border-purple-500">
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mb-2">Estudiantes Totales</p>
+                      <h3 className="text-5xl font-black">{new Set(myCourses.flatMap(c => [...(c.students || []), ...(c.studentsEmails || [])])).size}</h3>
+                    </Card>
+                  </div>
+                  {/* INYECCIÓN: Agenda Semanal Docente */}
+                  <WeeklyAgendaWidget courses={myCourses} />
                 </div>
                 <div className="lg:col-span-1">
                    <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
@@ -621,7 +684,6 @@
 
         // --- LISTA DE CURSOS ---
         const CoursesListView = ({ profile, courses, profiles, onSelectCourse }) => {
-          // INYECCIÓN: Si es Admin/Director ve todos los cursos (courses completo)
           const displayCourses = profile.role === 'teacher' 
              ? courses.filter(c => c.teacherId === profile.id || c.teacherEmail === profile.email) 
              : profile.role === 'student' 
@@ -674,8 +736,8 @@
           );
         };
 
-        // --- DETALLE DEL CURSO (QR, ASISTENCIA, NOTAS, TUTORIAS) ---
-        const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db }) => {
+        // --- DETALLE DEL CURSO (QR, ASISTENCIA MANUAL, NOTAS) ---
+        const CourseDetailView = ({ profile, course, sessions, attendances, grades, tutorings, profiles, showToast, onBack, db, appId }) => {
           const [topic, setTopic] = useState('');
           const [activeSession, setActiveSession] = useState(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
           const [studentTokenInput, setStudentTokenInput] = useState('');
@@ -725,12 +787,27 @@
             if (studentTokenInput.trim().toUpperCase() !== activeSession.currentToken) return showToast("Token inválido o expirado", "error");
             if (attendances.some(a => a.sessionId === activeSession.id && a.studentId === profile.id)) return showToast("Asistencia ya registrada", "info");
             
-            await addDoc(PATHS.attendance, { sessionId: activeSession.id, courseId: course.id, studentId: profile.id, timestamp: new Date().toISOString() });
+            await addDoc(PATHS.attendance, { sessionId: activeSession.id, courseId: course.id, studentId: profile.id, studentEmail: profile.email, timestamp: new Date().toISOString() });
             showToast("¡Asistencia confirmada!", "success");
             setStudentTokenInput('');
           };
 
-          // GUARDADO REAL DE NOTAS (Solo Docente o Admin si fuera necesario)
+          // INYECCIÓN: ASISTENCIA MANUAL DEL DOCENTE
+          const handleToggleManualAttendance = async (student) => {
+             const existingRecord = attendances.find(a => a.sessionId === activeSession.id && (a.studentId === student.id || a.studentEmail === student.email));
+             try {
+               if (existingRecord) {
+                   await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'attendance', existingRecord.id));
+                   showToast("Asistencia removida (Ausente)", "info");
+               } else {
+                   await addDoc(PATHS.attendance, { sessionId: activeSession.id, courseId: course.id, studentId: student.id, studentEmail: student.email, timestamp: new Date().toISOString() });
+                   showToast("Asistencia registrada manualmente", "success");
+               }
+             } catch(e) {
+                 showToast("Error modificando asistencia", "error");
+             }
+          };
+
           const handleSaveGrade = async (studentEmail, corte, field, value) => {
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              const numVal = parseFloat(value);
@@ -780,24 +857,51 @@
                     <Card className={activeSession ? "border-emerald-500 shadow-emerald-500/20 shadow-xl" : ""}>
                       {!activeSession ? (
                         <div>
-                           <h2 className="text-2xl font-black mb-4">Activar Control QR</h2>
+                           <h2 className="text-2xl font-black mb-4">Activar Control Híbrido (QR / Manual)</h2>
                            <input type="text" placeholder="Temática de la sesión" value={topic} onChange={e=>setTopic(e.target.value)} className="w-full md:w-1/2 px-4 py-3 border-2 rounded-xl mb-4 mr-4 bg-slate-50 dark:bg-slate-700"/>
-                           <Button onClick={handleStartClass}>Generar QR Dinámico</Button>
+                           <Button onClick={handleStartClass}>Iniciar Clase</Button>
                         </div>
                       ) : (
-                        <div className="flex flex-col md:flex-row gap-8 items-center">
-                           <div className="flex-1">
-                             <Badge color="green" className="mb-4 animate-pulse">Transmitiendo QR</Badge>
+                        <div className="flex flex-col xl:flex-row gap-8 items-start">
+                           <div className="flex-1 w-full">
+                             <Badge color="green" className="mb-4 animate-pulse">Clase en Progreso</Badge>
                              <h2 className="text-3xl font-black mb-6">{activeSession.topic}</h2>
+                             
+                             <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl text-center border-2 border-slate-200 flex flex-col items-center justify-center mb-6">
+                               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.currentToken}`} alt="QR" className="mx-auto rounded-xl mb-4"/>
+                               <span className="text-4xl font-black font-mono tracking-[0.2em]">{activeSession.currentToken}</span>
+                               <p className="text-brand-600 font-bold text-xs mt-2 uppercase">Rotando cada 10s</p>
+                             </div>
+
                              <div className="flex gap-4">
-                               <Button onClick={()=>handleEndClass(true)} variant="primary">Guardar Clase</Button>
-                               <Button onClick={()=>handleEndClass(false)} variant="danger">Reportar Falla Docente</Button>
+                               <Button onClick={()=>handleEndClass(true)} variant="primary" className="flex-1">Finalizar y Guardar</Button>
+                               <Button onClick={()=>handleEndClass(false)} variant="danger" className="flex-1">No se dictó</Button>
                              </div>
                            </div>
-                           <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-2xl text-center border-2 border-slate-200">
-                             <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${activeSession.currentToken}`} alt="QR" className="mx-auto rounded-xl mb-4"/>
-                             <span className="text-4xl font-black font-mono tracking-[0.2em]">{activeSession.currentToken}</span>
-                             <p className="text-brand-600 font-bold text-xs mt-2 uppercase">Rotando cada 10s</p>
+
+                           {/* INYECCIÓN: LISTADO DE ASISTENCIA MANUAL */}
+                           <div className="flex-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-6 shadow-inner max-h-[500px] overflow-y-auto">
+                              <h3 className="font-black text-xl mb-4 flex items-center gap-2"><Hand size={20}/> Marcación Manual</h3>
+                              <p className="text-xs text-slate-500 mb-4">Marca la asistencia manualmente para aquellos estudiantes sin dispositivo.</p>
+                              <div className="space-y-2">
+                                 {enrolledStudentsData.map(st => {
+                                    const isPresent = attendances.some(a => a.sessionId === activeSession.id && (a.studentId === st.id || a.studentEmail === st.email));
+                                    return (
+                                       <div key={st.email} className="flex justify-between items-center bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-600">
+                                          <div className="min-w-0 flex-1 pr-2">
+                                             <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{st.name}</p>
+                                             <p className="text-[10px] text-slate-500 truncate">{st.email}</p>
+                                          </div>
+                                          <button 
+                                             onClick={() => handleToggleManualAttendance(st)}
+                                             className={`px-4 py-2 rounded-lg font-bold text-xs shrink-0 transition-colors ${isPresent ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-600 dark:text-slate-300'}`}
+                                          >
+                                             {isPresent ? '✅ Presente' : 'Marcar'}
+                                          </button>
+                                       </div>
+                                    )
+                                 })}
+                              </div>
                            </div>
                         </div>
                       )}
@@ -828,7 +932,7 @@
                        <tbody>
                           {courseSessions.map(s => {
                             const presentCount = attendances.filter(a => a.sessionId === s.id).length;
-                            const isPresent = attendances.some(a => a.sessionId === s.id && a.studentId === profile.id);
+                            const isPresent = attendances.some(a => a.sessionId === s.id && (a.studentId === profile.id || a.studentEmail === profile.email));
                             return (
                               <tr key={s.id} className="border-b border-slate-100"><td className="py-4 font-bold">{new Date(s.date).toLocaleDateString()}</td><td className="py-4 font-bold text-slate-800 dark:text-white">{s.topic}</td><td className="py-4 text-right">
                                 {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') ? <Badge color="gray">{presentCount} Alumnos</Badge> : (isPresent ? <Badge color="green">Presente</Badge> : <Badge color="red">Ausente</Badge>)}
@@ -841,7 +945,7 @@
                 </div>
               )}
 
-              {/* TAB CALIFICACIONES (REAL) */}
+              {/* TAB CALIFICACIONES */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
                   {profile.role === 'teacher' || profile.role === 'admin' ? (
@@ -925,7 +1029,7 @@
           );
         };
 
-        // --- DASHBOARD ADMIN (INYECCIÓN DE LÓGICA DE USUARIOS, CALENDARIO Y SEMESTRE) ---
+        // --- DASHBOARD ADMIN ---
         const AdminView = ({ showToast, profiles, courses, db, events, semesterConfig, appId, grades }) => {
           const [adminTab, setAdminTab] = useState('resumen'); 
           
@@ -934,18 +1038,16 @@
           const [eventDate, setEventDate] = useState('');
           const [eventType, setEventType] = useState('institucional');
 
-          // INYECCIÓN: Estados Configuración Semestre
-          const [semStart, setSemStart] = useState('');
-          const [semEnd, setSemEnd] = useState('');
-          const [semExcluded, setSemExcluded] = useState('');
+          // Estados Configuración Semestre (Inyección Valores 202610 por defecto si no hay en DB)
+          const [semStart, setSemStart] = useState('2026-02-02');
+          const [semEnd, setSemEnd] = useState('2026-05-29');
+          const [semExcluded, setSemExcluded] = useState('9'); // Semana Santa 2026
           
-          // INYECCIÓN: Filtro de Usuarios
           const [roleFilter, setRoleFilter] = useState('all');
 
-          // Inicializar datos del semestre cuando lleguen
           useEffect(() => {
-              if (semesterConfig) {
-                  setSemStart(semesterConfig.startDate || '');
+              if (semesterConfig && semesterConfig.startDate) {
+                  setSemStart(semesterConfig.startDate);
                   setSemEnd(semesterConfig.endDate || '');
                   setSemExcluded(semesterConfig.excludedWeeks || '');
               }
@@ -953,7 +1055,7 @@
 
           const filteredProfiles = profiles.filter(p => roleFilter === 'all' || p.role === roleFilter);
 
-          // INGESTA DE PROGRAMACIÓN
+          // INYECCIÓN: LÓGICA DE CONDENSACIÓN DE HORARIOS EN EXCEL
           const handleProgramacionUpload = async (e) => {
              const file = e.target.files[0];
              if(!file) return;
@@ -967,12 +1069,11 @@
                   const wsname = wb.SheetNames[0];
                   const data = XLSX.utils.sheet_to_json(wb.Sheets[wsname]);
                   
-                  let count = 0;
+                  let aggregatedCourses = {};
+
                   for (let row of data) {
                      if(row['NRC'] && (row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'])) {
                         const nrcStr = String(row['NRC']);
-                        const existingCourse = courses.find(c => c.nrc === nrcStr);
-                        
                         let scheduleDays = [];
                         if (row['LUN']) scheduleDays.push('Lun');
                         if (row['MAR']) scheduleDays.push('Mar');
@@ -983,35 +1084,49 @@
                         if (row['DOM']) scheduleDays.push('Dom');
                         const schedule = `${scheduleDays.join(', ')} ${row['HORA INI'] || ''}-${row['HORA FIN'] || ''}`;
 
-                        const courseData = {
-                            period: row['PERIODO'] || '',
-                            nrc: nrcStr,
-                            name: row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'] || 'Sin Nombre',
-                            code: `${row['MATERIA'] || ''}${row['CURSO'] || ''}`,
-                            teacherEmail: (row['EMAIL'] || '').toLowerCase(),
-                            teacherName: `${row['NOMBRE'] || ''} ${row['APELLIDOS'] || ''}`.trim() || row['ID DOCENTE'],
-                            schedule: schedule,
-                            campus: row['CAMPUS'] || '',
-                            building: `${row['EDIFICIO'] || ''} ${row['SALON'] || ''}`.trim(),
-                            capacity: row['CAPACIDAD MAXIMA'] || 0,
-                            enrolledCount: row['INSCRITOS'] || 0,
-                            availableSeats: row['CUPOS DISPONIBLES'] || 0,
-                            credits: row['HORAS_CREDITO'] || 3
-                        };
-
-                        if (existingCourse) {
-                            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'courses', existingCourse.id), courseData);
+                        if (!aggregatedCourses[nrcStr]) {
+                            aggregatedCourses[nrcStr] = {
+                                period: row['PERIODO'] || '',
+                                nrc: nrcStr,
+                                name: row['TITULO_PROGRAMACION'] || row['TITULO_SCACRSE'] || row['MATERIA'] || 'Sin Nombre',
+                                code: `${row['MATERIA'] || ''}${row['CURSO'] || ''}`,
+                                teacherEmail: (row['EMAIL'] || '').toLowerCase(),
+                                teacherName: `${row['NOMBRE'] || ''} ${row['APELLIDOS'] || ''}`.trim() || row['ID DOCENTE'],
+                                schedule: schedule,
+                                campus: row['CAMPUS'] || '',
+                                building: `${row['EDIFICIO'] || ''} ${row['SALON'] || ''}`.trim(),
+                                capacity: row['CAPACIDAD MAXIMA'] || 0,
+                                enrolledCount: row['INSCRITOS'] || 0,
+                                availableSeats: row['CUPOS DISPONIBLES'] || 0,
+                                credits: row['HORAS_CREDITO'] || 3
+                            };
                         } else {
-                            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'courses'), {
-                                ...courseData,
-                                studentsEmails: [], 
-                                students: []
-                            });
+                            // Si el NRC ya existe, condensa el horario si no está duplicado
+                            if (!aggregatedCourses[nrcStr].schedule.includes(schedule)) {
+                                aggregatedCourses[nrcStr].schedule += ` | ${schedule}`;
+                            }
                         }
-                        count++;
                      }
                   }
-                  showToast(`Programación Sincronizada: ${count} grupos procesados de manera exitosa.`, "success");
+
+                  let count = 0;
+                  for (let nrc in aggregatedCourses) {
+                      const courseData = aggregatedCourses[nrc];
+                      const existingCourse = courses.find(c => c.nrc === nrc);
+                      
+                      if (existingCourse) {
+                          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'courses', existingCourse.id), courseData);
+                      } else {
+                          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'courses'), {
+                              ...courseData,
+                              studentsEmails: [], 
+                              students: []
+                          });
+                      }
+                      count++;
+                  }
+                  
+                  showToast(`Programación Sincronizada: ${count} grupos condensados exitosamente.`, "success");
                 } catch(err) {
                   showToast("Error al procesar el archivo de programación.", "error");
                   console.error(err);
@@ -1044,7 +1159,6 @@
                           if (!coursesMap[nrcStr]) coursesMap[nrcStr] = new Set();
                           coursesMap[nrcStr].add(email);
 
-                          // Extraer y procesar Calificaciones (NOTA_SH y GNAME)
                           if (row['GNAME'] && row['NOTA_SH']) {
                               const notaVal = parseFloat(row['NOTA_SH']);
                               const corteInfo = row['GNAME'].includes('1') ? 1 : (row['GNAME'].includes('2') ? 2 : 0);
@@ -1062,7 +1176,6 @@
                       }
                   }
 
-                  // 1. Sincronizar a los estudiantes dentro de las clases correspondientes (NRC)
                   let updatedCourses = 0;
                   for (let nrc in coursesMap) {
                       const existingCourse = courses.find(c => c.nrc === nrc);
@@ -1080,12 +1193,11 @@
 
                   showToast(`Listas de clase vinculadas en ${updatedCourses} asignaturas. Sincronizando notas...`, "info");
 
-                  // 2. Sincronizar las notas subidas (Se guardan cruzando NRC + Email del estudiante)
                   let notesCount = 0;
                   for (let g of gradesToUpdate) {
                       const course = courses.find(c => c.nrc === g.nrc);
                       if (course) {
-                          const field = 'p1'; // Mapeamos la nota cargada al Parcial 1 temporalmente en el simulador
+                          const field = 'p1'; 
                           const existingGrade = grades?.find(gr => gr.courseId === course.id && gr.studentEmail === g.email && gr.corte === g.corte);
                           if(existingGrade) {
                             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'grades', existingGrade.id), { [field]: g.nota, pName: g.gname });
@@ -1159,7 +1271,6 @@
                 <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Ingesta (Excel)</button>
                 <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Usuarios</button>
                 <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><PartyPopper className="inline mr-2" size={18}/> Eventos</button>
-                {/* INYECCIÓN: Nueva Pestaña */}
                 <button onClick={()=>setAdminTab('semestre')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='semestre' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Sliders className="inline mr-2" size={18}/> Configuración Semestre</button>
               </div>
 
@@ -1193,7 +1304,6 @@
                  <Card className="mt-6">
                     <h3 className="font-black text-2xl mb-6">Auditoría de Roles y Usuarios</h3>
                     
-                    {/* INYECCIÓN: Botones de Filtrado de Usuarios */}
                     <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                        <button onClick={()=>setRoleFilter('all')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='all' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Todos ({profiles.length})</button>
                        <button onClick={()=>setRoleFilter('student')} className={`px-4 py-2 rounded-xl font-bold text-sm ${roleFilter==='student' ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-700'}`}>Estudiantes</button>
@@ -1274,7 +1384,6 @@
                  </div>
               )}
 
-              {/* INYECCIÓN: NUEVA PESTAÑA PARA CONFIGURACIÓN DEL SEMESTRE */}
               {adminTab === 'semestre' && (
                  <Card className="mt-6 border-t-[6px] border-t-brand-500">
                     <h3 className="font-black text-2xl mb-2 flex items-center gap-3"><Sliders className="text-brand-500"/> Configuración del Semestre Académico</h3>
@@ -1294,7 +1403,7 @@
                     <div className="mb-8">
                        <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Semanas Excluidas (Semanas sin carga académica)</label>
                        <input type="text" value={semExcluded} onChange={e=>setSemExcluded(e.target.value)} placeholder="Ej: 8, 14 (Separadas por comas)" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
-                       <p className="text-xs text-slate-400 mt-2 font-bold">Ingresa el número de la semana calendario que no debe contarse (ej. Semana Santa = 8). El motor ajustará el cálculo para que las semanas "activas" sean transparentes.</p>
+                       <p className="text-xs text-slate-400 mt-2 font-bold">Ingresa el número de la semana calendario que no debe contarse (ej. Semana Santa = 9). El motor ajustará el cálculo para que las semanas "activas" sean transparentes.</p>
                     </div>
                     
                     <Button onClick={handleSaveSemester} className="w-full md:w-auto" icon={Save}>Guardar Configuración en DB</Button>
