@@ -67,7 +67,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning, Filter, Library, Search
         } from 'lucide-react';
 
         // ============================================================================
@@ -116,6 +116,7 @@
             yellow: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
             purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
             gray: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+            indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
           };
           return (
             <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${colors[color] || colors.blue} ${className}`}>
@@ -163,6 +164,7 @@
           const [selectedCourse, setSelectedCourse] = useState(null);
           const [roleOverride, setRoleOverride] = useState(null);
 
+          // INIT & AUTH LISTENER
           useEffect(() => {
             const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
               if (currentUser && currentUser.email) {
@@ -184,6 +186,7 @@
             return () => unsubscribe();
           }, []);
 
+          // FIRESTORE SYNC
           useEffect(() => {
             if (!user) return;
             setLoading(true);
@@ -277,6 +280,9 @@
             setRoleOverride(null);
           };
 
+          // ============================================================================
+          // 4. LAYOUT ROUTER
+          // ============================================================================
           if (loading) return (
             <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 fade-in">
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-brand-600 mb-4"></div>
@@ -347,10 +353,10 @@
                   
                   <NavItem icon={BookOpen} label="Asignaturas y Horarios" active={currentView === 'courses' || currentView === 'course-detail'} onClick={() => setCurrentView('courses')} />
                   
-                  <NavItem icon={UserCircle} label="Mi Perfil" active={currentView === 'profile'} onClick={() => setCurrentView('profile')} />
+                  <NavItem icon={UserCircle} label="Mi Perfil Institucional" active={currentView === 'profile'} onClick={() => setCurrentView('profile')} />
 
                   {(currentUserProfile.role === 'director' || currentUserProfile.role === 'admin') && (
-                    <NavItem icon={PieChart} label="Analítica Institucional" active={currentView === 'analytics'} onClick={() => setCurrentView('analytics')} />
+                    <NavItem icon={Activity} label="Data Science & Analítica" active={currentView === 'analytics'} onClick={() => setCurrentView('analytics')} />
                   )}
 
                   {currentUserProfile.role === 'admin' && (
@@ -403,7 +409,7 @@
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
                 {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} semesterConfig={semesterConfig} />}
                 {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} attendances={attendances} />}
-                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} showToast={showToast} />}
+                {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} tutorings={tutorings} showToast={showToast} />}
               </main>
 
             </div>
@@ -561,13 +567,16 @@
              campus: profile.campus || 'Bucaramanga',
              phone: profile.phone || '',
              program: profile.program || '', 
-             semesterLevel: profile.semesterLevel || ''
+             semesterLevel: profile.semesterLevel || '',
+             faculty: profile.faculty || '',
+             department: profile.department || '',
+             tutoringSchedule: profile.tutoringSchedule || '' // INYECCIÓN: Horario de tutoría base
           });
 
           const handleSave = async () => {
              try {
                 await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'profiles', profile.id), formData);
-                showToast("Información demográfica actualizada", "success");
+                showToast("Información del perfil actualizada", "success");
              } catch(e) {
                 showToast("Error al actualizar perfil", "error");
              }
@@ -577,7 +586,7 @@
              <div className="max-w-4xl mx-auto slide-up space-y-6">
                 <header className="mb-8">
                   <h1 className="text-4xl font-black">Mi Perfil Institucional</h1>
-                  <p className="text-slate-500 mt-2 font-medium">Actualiza tu información demográfica para uso en el sistema académico y seguimiento.</p>
+                  <p className="text-slate-500 mt-2 font-medium">Actualiza tu información demográfica para uso en el sistema académico y seguimiento analítico.</p>
                 </header>
                 <Card>
                    <div className="flex flex-col md:flex-row gap-8">
@@ -589,17 +598,32 @@
                       <div className="flex-1 space-y-5">
                          <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Nombre Completo</label>
-                            <input type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} disabled={profile.role === 'student'} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 disabled:opacity-50 focus:border-brand-500 outline-none"/>
+                            <input type="text" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} disabled={profile.role === 'student'} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 disabled:opacity-50 focus:border-brand-500 outline-none font-bold"/>
                          </div>
                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <div>
-                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Programa Académico</label>
-                               <input type="text" placeholder="Ej: Ingeniería de Sistemas" value={formData.program} onChange={e=>setFormData({...formData, program: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
-                            </div>
-                            <div>
-                               <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Semestre Actual</label>
-                               <input type="number" placeholder="Ej: 5" min="1" max="12" value={formData.semesterLevel} onChange={e=>setFormData({...formData, semesterLevel: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
-                            </div>
+                            {profile.role === 'student' ? (
+                               <>
+                                 <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Programa Académico / Carrera</label>
+                                    <input type="text" placeholder="Ej: Ingeniería de Sistemas" value={formData.program} onChange={e=>setFormData({...formData, program: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                                 </div>
+                                 <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Semestre Actual</label>
+                                    <input type="number" placeholder="Ej: 5" min="1" max="12" value={formData.semesterLevel} onChange={e=>setFormData({...formData, semesterLevel: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                                 </div>
+                               </>
+                            ) : (
+                               <>
+                                 <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Facultad</label>
+                                    <input type="text" placeholder="Ej: Ingeniería" value={formData.faculty} onChange={e=>setFormData({...formData, faculty: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                                 </div>
+                                 <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Dependencia / Depto</label>
+                                    <input type="text" placeholder="Ej: Depto Ciencias Básicas" value={formData.department} onChange={e=>setFormData({...formData, department: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
+                                 </div>
+                               </>
+                            )}
                             <div>
                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">F. Nacimiento</label>
                                <input type="date" value={formData.birthDate} onChange={e=>setFormData({...formData, birthDate: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
@@ -618,7 +642,13 @@
                                <option value="Virtual">Virtual / E-learning</option>
                             </select>
                          </div>
-                         <Button onClick={handleSave} icon={Save} className="w-full sm:w-auto mt-4">Guardar Cambios Demográficos</Button>
+                         {profile.role === 'teacher' && (
+                             <div>
+                                <label className="block text-xs font-bold text-purple-500 uppercase tracking-widest mb-1">Horario General de Tutorías (Visible a Estudiantes)</label>
+                                <textarea placeholder="Ej: Lunes de 4:00 a 6:00 PM (Oficina L-401) | Jueves 10:00 AM (Teams)" value={formData.tutoringSchedule} onChange={e=>setFormData({...formData, tutoringSchedule: e.target.value})} className="w-full p-3 rounded-xl border-2 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 focus:border-purple-500 outline-none h-20 resize-none font-bold text-sm text-purple-800 dark:text-purple-300"></textarea>
+                             </div>
+                         )}
+                         <Button onClick={handleSave} icon={Save} className="w-full sm:w-auto mt-4">Guardar Cambios de Perfil</Button>
                       </div>
                    </div>
                 </Card>
@@ -637,7 +667,7 @@
         const DashboardRouter = ({ profile, courses, sessions, attendances, tutorings, events, profiles, semesterConfig, grades }) => {
           if (profile.role === 'student') return <StudentDashboard profile={profile} courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
           if (profile.role === 'teacher') return <TeacherDashboard profile={profile} courses={courses} sessions={sessions} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig}/>;
-          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} />;
+          if (profile.role === 'director' || profile.role === 'admin') return <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} tutorings={tutorings} />;
           return null;
         };
 
@@ -664,7 +694,7 @@
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
                 <h1 className="text-4xl font-black text-slate-900 dark:text-white">Hola, {profile.name.split(' ')[0]} 👋</h1>
-                <p className="text-slate-500 text-lg mt-2">Campus UNAB Bucaramanga</p>
+                <p className="text-slate-500 text-lg mt-2">Campus UNAB {profile.campus || 'Bucaramanga'} | {profile.program || 'Estudiante'}</p>
               </header>
 
               {stats.risk && stats.expected > 0 && (
@@ -908,7 +938,6 @@
              }
           };
 
-          // INYECCIÓN: ENVÍO CORREO AUSENTES
           const handleNotifyAbsentees = (session) => {
               const presentIds = attendances.filter(a => a.sessionId === session.id).map(a=>a.studentEmail);
               const absentees = enrolledStudentsData.filter(st => !presentIds.includes(st.email) && !(course.withdrawnStudents || []).includes(st.email));
@@ -987,6 +1016,8 @@
               return prof || { id: email, email: email, name: email.split('@')[0].toUpperCase(), role: 'student' };
           });
           const totalEstudiantes = enrolledStudentsData.length;
+
+          const teacherProfile = profiles.find(p => p.id === course.teacherId || p.email === course.teacherEmail);
 
           const startDateStr = semesterConfig?.startDate || '2026-02-02';
           const semesterStart = new Date(startDateStr + 'T00:00:00');
@@ -1227,7 +1258,7 @@
                 </div>
               )}
 
-              {/* TAB CALIFICACIONES (COMPLETADO) */}
+              {/* TAB CALIFICACIONES */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
                   {profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director' ? (
@@ -1343,6 +1374,13 @@
               {/* TAB TUTORIAS */}
               {activeTab === 'tutoring' && (
                 <div className="space-y-6 mt-6">
+                   {teacherProfile?.tutoringSchedule && (
+                       <Card className="bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800">
+                          <h3 className="font-black text-purple-800 dark:text-purple-300 text-lg mb-2">Horario Base de Tutorías del Docente</h3>
+                          <p className="text-sm font-bold text-purple-700 dark:text-purple-400 whitespace-pre-line">{teacherProfile.tutoringSchedule}</p>
+                       </Card>
+                   )}
+
                    {profile.role === 'teacher' && (
                        <Card className="border-t-[4px] border-t-purple-500">
                           <h3 className="font-black text-xl mb-4">Programar Nueva Tutoría</h3>
@@ -1387,6 +1425,7 @@
                 </div>
               )}
 
+              {/* INYECCIÓN: DATA SCIENCE POR MATERIA */}
               {activeTab === 'analytics' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 slide-up">
                       <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-emerald-500">
@@ -1432,14 +1471,23 @@
         };
 
         // --- DASHBOARD DIRECTOR / ANALÍTICA CON COMPARATIVAS Y DESCARGA ---
-        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], showToast }) => {
+        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], tutorings = [], showToast }) => {
+          
+          const [analyticsTab, setAnalyticsTab] = useState('global');
           
           const periods = Array.from(new Set(courses.map(c => c.period).filter(Boolean))).sort().reverse();
+          const nucleos = Array.from(new Set(courses.map(c => c.lineaTematica).filter(Boolean))).sort();
+          
           const [selectedPeriod, setSelectedPeriod] = useState(periods[0] || '');
           const [comparePeriod, setComparePeriod] = useState('');
+          const [selectedNucleo, setSelectedNucleo] = useState('');
+          const [searchTerm, setSearchTerm] = useState('');
 
-          const filteredCourses = courses.filter(c => selectedPeriod === '' || c.period === selectedPeriod);
-          const compareCourses = comparePeriod ? courses.filter(c => c.period === comparePeriod) : [];
+          const filteredCourses = courses.filter(c => 
+             (selectedPeriod === '' || c.period === selectedPeriod) &&
+             (selectedNucleo === '' || c.lineaTematica === selectedNucleo)
+          );
+          const compareCourses = comparePeriod ? courses.filter(c => c.period === comparePeriod && (selectedNucleo === '' || c.lineaTematica === selectedNucleo)) : [];
 
           const calculateMetrics = (crs) => {
               const cIds = crs.map(c=>c.id);
@@ -1466,11 +1514,74 @@
               });
               const passRate = totalGrades === 0 ? 0 : Math.round((approvedCount / totalGrades) * 100);
 
-              return { courses: crs.length, sessions: sess.length, attRate: rate, passRate };
+              // Horas perdidas
+              const lostHours = sessions.filter(s => cIds.includes(s.courseId) && s.status === 'completed' && s.completed === false).length;
+
+              return { courses: crs.length, sessions: sess.length, attRate: rate, passRate, lostHours };
           };
 
           const m1 = calculateMetrics(filteredCourses);
           const m2 = comparePeriod ? calculateMetrics(compareCourses) : null;
+
+          const gradeDistrib = [0,0,0,0,0]; 
+          const cIdsF = filteredCourses.map(c=>c.id);
+          grades.filter(g=>cIdsF.includes(g.courseId)).forEach(g => {
+             if (g.p1 !== undefined) {
+                 if (g.p1 < 1.0) gradeDistrib[0]++;
+                 else if (g.p1 < 2.0) gradeDistrib[1]++;
+                 else if (g.p1 < 3.0) gradeDistrib[2]++;
+                 else if (g.p1 < 4.0) gradeDistrib[3]++;
+                 else gradeDistrib[4]++;
+             }
+          });
+          const maxDistrib = Math.max(...gradeDistrib, 1);
+
+          // Estadisticas por estudiante
+          const studentStats = useMemo(() => {
+              if (analyticsTab !== 'students') return [];
+              return profiles.filter(p => p.role === 'student' && (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.email.includes(searchTerm.toLowerCase()))).map(st => {
+                 const myC = filteredCourses.filter(c => (c.studentsEmails || []).includes(st.email) && !(c.withdrawnStudents || []).includes(st.email));
+                 if(myC.length === 0) return null;
+                 
+                 let exp = 0, att = 0;
+                 myC.forEach(c => {
+                     exp += sessions.filter(s => s.courseId === c.id && s.completed).length;
+                     att += attendances.filter(a => a.courseId === c.id && a.studentEmail === st.email).length;
+                 });
+                 const attRate = exp === 0 ? 100 : Math.round((att/exp)*100);
+                 
+                 let sumGrades = 0, countGrades = 0;
+                 myC.forEach(c => {
+                    const g = grades.find(gr => gr.courseId === c.id && gr.studentEmail === st.email && gr.corte === 1);
+                    if(g && g.p1 !== undefined && g.p2 !== undefined) {
+                       sumGrades += ((g.p1*0.5)+(g.p2*0.5));
+                       countGrades++;
+                    }
+                 });
+                 const avgGrade = countGrades === 0 ? '--' : (sumGrades/countGrades).toFixed(1);
+
+                 return { ...st, enrolledCount: myC.length, attRate, avgGrade };
+              }).filter(Boolean);
+          }, [analyticsTab, profiles, filteredCourses, searchTerm, sessions, attendances, grades]);
+
+          // Estadisticas de Tutorias
+          const tutoringStats = useMemo(() => {
+              if (analyticsTab !== 'tutorings') return { byTeacher: {}, byCourse: {} };
+              const filteredTuts = tutorings.filter(t => cIdsF.includes(t.courseId));
+              const byT = {};
+              const byC = {};
+              filteredTuts.forEach(t => {
+                  const teacher = profiles.find(p => p.id === t.teacherId);
+                  const tName = teacher ? teacher.name : 'Desconocido';
+                  byT[tName] = (byT[tName] || 0) + 1;
+                  
+                  const course = filteredCourses.find(c => c.id === t.courseId);
+                  const cName = course ? course.name : 'Desconocido';
+                  byC[cName] = (byC[cName] || 0) + 1;
+              });
+              return { byTeacher: byT, byCourse: byC, total: filteredTuts.length };
+          }, [analyticsTab, tutorings, cIdsF, profiles, filteredCourses]);
+
 
           const handleDownloadDB = () => {
              showToast("Generando copias de seguridad Excel...", "info");
@@ -1479,11 +1590,10 @@
              const wsCourses = XLSX.utils.json_to_sheet(filteredCourses);
              XLSX.utils.book_append_sheet(wb, wsCourses, "Cursos");
 
-             const cIds = filteredCourses.map(c=>c.id);
-             const wsAtts = XLSX.utils.json_to_sheet(attendances.filter(a => cIds.includes(a.courseId)));
+             const wsAtts = XLSX.utils.json_to_sheet(attendances.filter(a => cIdsF.includes(a.courseId)));
              XLSX.utils.book_append_sheet(wb, wsAtts, "Asistencias");
 
-             const wsGrades = XLSX.utils.json_to_sheet(grades.filter(g => cIds.includes(g.courseId)));
+             const wsGrades = XLSX.utils.json_to_sheet(grades.filter(g => cIdsF.includes(g.courseId)));
              XLSX.utils.book_append_sheet(wb, wsGrades, "Notas");
 
              XLSX.writeFile(wb, `EduSync_Backup_${selectedPeriod || 'Global'}.xlsx`);
@@ -1494,24 +1604,31 @@
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                 <div>
-                   <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional de Alto Nivel</h1>
-                   <p className="text-slate-500 font-medium mt-2">Filtra, compara semestres y descarga backups de la base de datos real.</p>
+                   <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional (Data Science)</h1>
+                   <p className="text-slate-500 font-medium mt-2">Filtros multidimensionales, comparativas y descargas de base de datos.</p>
                 </div>
-                <Button onClick={handleDownloadDB} icon={Download} variant="secondary">Descargar DB Excel</Button>
+                <Button onClick={handleDownloadDB} icon={Download} variant="secondary">Descargar Excel (Backup)</Button>
               </header>
 
               <Card className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
                  <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="flex-1 w-full">
-                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Periodo Principal</label>
+                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Filter size={12}/> Periodo Principal</label>
                        <select value={selectedPeriod} onChange={e=>setSelectedPeriod(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none">
-                          <option value="">Consolidado Global (Todos)</option>
+                          <option value="">Consolidado (Todos)</option>
                           {periods.map(p => <option key={p} value={p}>{p}</option>)}
                        </select>
                     </div>
-                    <div className="flex items-center justify-center shrink-0 mt-4 sm:mt-0 font-black text-slate-300">VS</div>
                     <div className="flex-1 w-full">
-                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Comparar Con</label>
+                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Library size={12}/> Núcleo Temático</label>
+                       <select value={selectedNucleo} onChange={e=>setSelectedNucleo(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none">
+                          <option value="">Todas las líneas</option>
+                          {nucleos.map(n => <option key={n} value={n}>{n}</option>)}
+                       </select>
+                    </div>
+                    <div className="flex items-center justify-center shrink-0 mt-4 sm:mt-0 font-black text-slate-300 px-4">VS</div>
+                    <div className="flex-1 w-full">
+                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Comparar Con (Periodo)</label>
                        <select value={comparePeriod} onChange={e=>setComparePeriod(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none">
                           <option value="">Sin comparativa</option>
                           {periods.filter(p=>p!==selectedPeriod).map(p => <option key={p} value={p}>{p}</option>)}
@@ -1520,45 +1637,120 @@
                  </div>
               </Card>
 
-              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                 <div className="lg:col-span-3 flex flex-col gap-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Card className="border-t-4 border-blue-500">
-                           <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Cursos Activos</p>
-                           <h3 className="text-5xl font-black">{m1.courses}</h3>
-                           {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.courses} en {comparePeriod}</p>}
-                        </Card>
-                        <Card className="border-t-4 border-emerald-500">
-                           <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Tasa de Aprobación (C1)</p>
-                           <h3 className="text-5xl font-black">{m1.passRate}%</h3>
-                           {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.passRate}% en {comparePeriod}</p>}
-                        </Card>
-                        <Card className="border-t-4 border-rose-500">
-                           <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Tasa Global Asistencia</p>
-                           <h3 className={`text-5xl font-black ${m1.attRate < 80 ? 'text-rose-600' : 'text-emerald-600'}`}>{m1.attRate}%</h3>
-                           {m2 && <p className={`text-xs font-bold mt-2 ${m2.attRate < m1.attRate ? 'text-emerald-500' : 'text-rose-500'}`}>VS {m2.attRate}% en {comparePeriod}</p>}
-                        </Card>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 gap-6">
-                       <Card className="flex flex-col justify-center border-t-4 border-brand-500">
-                           <h3 className="font-black text-xl mb-4 flex items-center gap-2"><PieChart size={20} className="text-brand-500"/> Riesgo de Deserción Institucional ({selectedPeriod || 'Global'})</h3>
-                           <p className="text-sm text-slate-500 mb-6">Proporción de inasistencias en base a la capacidad total esperada de todos los cursos filtrados.</p>
-                           <div className="w-full bg-slate-100 dark:bg-slate-700 h-6 rounded-full overflow-hidden flex shadow-inner">
-                               <div className="bg-emerald-500 h-full transition-all" style={{width: `${m1.attRate}%`}}></div>
-                               <div className="bg-rose-500 h-full transition-all" style={{width: `${100 - m1.attRate}%`}}></div>
-                           </div>
-                           <div className="flex justify-between text-xs font-bold mt-3">
-                              <span className="text-emerald-600">Sólida ({m1.attRate}%)</span>
-                              <span className="text-rose-600">Riesgo / Deserción ({100 - m1.attRate}%)</span>
-                           </div>
-                       </Card>
-                    </div>
-                 </div>
-                 <div className="lg:col-span-1">
-                    <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
-                 </div>
+              <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
+                <button onClick={()=>setAnalyticsTab('global')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='global' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Resumen Global</button>
+                <button onClick={()=>setAnalyticsTab('students')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='students' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Desempeño Estudiantes</button>
+                <button onClick={()=>setAnalyticsTab('tutorings')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='tutorings' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Estadísticas de Tutorías</button>
               </div>
+
+              {analyticsTab === 'global' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 slide-up">
+                     <div className="lg:col-span-3 flex flex-col gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <Card className="border-t-4 border-blue-500">
+                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Cursos</p>
+                               <h3 className="text-4xl font-black">{m1.courses}</h3>
+                               {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.courses} en {comparePeriod}</p>}
+                            </Card>
+                            <Card className="border-t-4 border-emerald-500">
+                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Aprobación (C1)</p>
+                               <h3 className="text-4xl font-black">{m1.passRate}%</h3>
+                               {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.passRate}% en {comparePeriod}</p>}
+                            </Card>
+                            <Card className="border-t-4 border-rose-500">
+                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Asistencia Global</p>
+                               <h3 className={`text-4xl font-black ${m1.attRate < 80 ? 'text-rose-600' : 'text-emerald-600'}`}>{m1.attRate}%</h3>
+                               {m2 && <p className={`text-xs font-bold mt-2 ${m2.attRate < m1.attRate ? 'text-emerald-500' : 'text-rose-500'}`}>VS {m2.attRate}% en {comparePeriod}</p>}
+                            </Card>
+                            <Card className="border-t-4 border-amber-500 bg-amber-50 dark:bg-amber-900/10">
+                               <p className="text-amber-600 dark:text-amber-400 font-bold uppercase tracking-widest text-[10px] mb-2 flex items-center gap-1"><Clock size={12}/> Horas Perdidas</p>
+                               <h3 className="text-4xl font-black text-amber-700 dark:text-amber-300">{m1.lostHours} <span className="text-sm">ses.</span></h3>
+                               <p className="text-[10px] font-bold mt-2 text-amber-600/70">Clases no dictadas por el docente</p>
+                            </Card>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-6">
+                           <Card className="bg-slate-900 dark:bg-slate-950 border-none shadow-2xl">
+                               <h3 className="text-white font-black text-xl mb-6 flex items-center gap-2"><BarChart3 size={20} className="text-brand-400"/> Distribución de Notas (Filtro Activo)</h3>
+                               <div className="flex items-end justify-between h-40 gap-2 mb-2">
+                                  {gradeDistrib.map((val, idx) => (
+                                      <div key={idx} className="relative flex flex-col justify-end w-full h-full group">
+                                         <div className="bg-brand-500 hover:bg-brand-400 rounded-t-md transition-all grow-up" style={{height: `${(val / maxDistrib) * 100}%`}}></div>
+                                         <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-xs font-black px-2 py-1 rounded shadow-lg">{val}</div>
+                                      </div>
+                                  ))}
+                               </div>
+                               <div className="flex justify-between text-slate-400 text-xs font-bold border-t border-slate-700 pt-2">
+                                  <span>0-1</span><span>1-2</span><span>2-3</span><span>3-4</span><span>4-5</span>
+                               </div>
+                           </Card>
+                        </div>
+                     </div>
+                     <div className="lg:col-span-1">
+                        <AcademicCalendarWidget events={events} profiles={profiles} semesterConfig={semesterConfig} />
+                     </div>
+                  </div>
+              )}
+
+              {analyticsTab === 'students' && (
+                  <Card className="slide-up">
+                      <div className="flex justify-between items-center mb-6">
+                         <h3 className="font-black text-2xl">Métricas y Seguimiento por Estudiante</h3>
+                         <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                            <input type="text" placeholder="Buscar alumno..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 border rounded-xl bg-slate-50 text-sm font-bold"/>
+                         </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                         <table className="w-full text-left text-sm">
+                            <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest"><th className="pb-3">Estudiante</th><th className="pb-3">Programa</th><th className="pb-3 text-center">Materias</th><th className="pb-3 text-center">Asistencia %</th><th className="pb-3 text-center">Promedio (C1)</th></tr></thead>
+                            <tbody>
+                               {studentStats.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-slate-400">No hay datos en esta categoría.</td></tr>}
+                               {studentStats.map(st => (
+                                  <tr key={st.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                     <td className="py-4 font-bold flex items-center gap-3">
+                                        <img src={st.photoURL || `https://ui-avatars.com/api/?name=${st.name}&background=eee`} className="w-8 h-8 rounded-full"/>
+                                        <div><p>{st.name}</p><p className="text-[10px] text-slate-500 font-medium">{st.email}</p></div>
+                                     </td>
+                                     <td className="py-4 text-xs font-bold text-slate-500">{st.program || 'No definido'}</td>
+                                     <td className="py-4 text-center font-black">{st.enrolledCount}</td>
+                                     <td className="py-4 text-center"><Badge color={st.attRate < 80 ? 'red' : 'green'}>{st.attRate}%</Badge></td>
+                                     <td className="py-4 text-center font-black">{st.avgGrade}</td>
+                                  </tr>
+                               ))}
+                            </tbody>
+                         </table>
+                      </div>
+                  </Card>
+              )}
+
+              {analyticsTab === 'tutorings' && (
+                  <div className="slide-up grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <Card className="md:col-span-2 border-t-4 border-purple-500">
+                          <h3 className="font-black text-2xl">Total Tutorías Registradas: {tutoringStats.total}</h3>
+                      </Card>
+                      <Card>
+                          <h3 className="font-black text-xl mb-4 border-b pb-2">Top Docentes (Tutorías)</h3>
+                          <ul className="space-y-3">
+                              {Object.entries(tutoringStats.byTeacher).sort((a,b)=>b[1]-a[1]).map(([name, count]) => (
+                                  <li key={name} className="flex justify-between items-center text-sm font-bold text-slate-700">
+                                      <span>{name}</span><Badge color="purple">{count} Sesiones</Badge>
+                                  </li>
+                              ))}
+                          </ul>
+                      </Card>
+                      <Card>
+                          <h3 className="font-black text-xl mb-4 border-b pb-2">Top Materias (Tutorías)</h3>
+                          <ul className="space-y-3">
+                              {Object.entries(tutoringStats.byCourse).sort((a,b)=>b[1]-a[1]).map(([name, count]) => (
+                                  <li key={name} className="flex justify-between items-center text-sm font-bold text-slate-700">
+                                      <span>{name}</span><Badge color="blue">{count} Sesiones</Badge>
+                                  </li>
+                              ))}
+                          </ul>
+                      </Card>
+                  </div>
+              )}
             </div>
           );
         };
@@ -1718,10 +1910,8 @@
 
                           const mergedEmails = Array.from(new Set([...currentEmails, ...newExcelEmails]));
                           
-                          // Lógica Inteligente de Deserción: Si estaban en current pero no vinieron en el excel, se consideran retirados
                           const newlyWithdrawn = currentEmails.filter(e => !newExcelEmails.includes(e));
                           let currentWithdrawn = existingCourse.withdrawnStudents || [];
-                          // Si un retirado vuelve a aparecer en el nuevo Excel, lo quitamos de withdrawn
                           currentWithdrawn = currentWithdrawn.filter(e => !newExcelEmails.includes(e));
                           const finalWithdrawn = Array.from(new Set([...currentWithdrawn, ...newlyWithdrawn]));
                           
