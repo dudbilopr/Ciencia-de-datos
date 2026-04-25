@@ -83,7 +83,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning, Filter, Library, Search, Layers
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning, Filter, Library, Search, Layers, ListChecks
         } from 'lucide-react';
 
         // ============================================================================
@@ -113,7 +113,7 @@
           grades: collection(db, 'artifacts', appId, 'public', 'data', 'grades'),
           tutorings: collection(db, 'artifacts', appId, 'public', 'data', 'tutorings'),
           events: collection(db, 'artifacts', appId, 'public', 'data', 'events'), 
-          nucleos: collection(db, 'artifacts', appId, 'public', 'data', 'nucleos'), // NUEVO: Núcleos
+          nucleos: collection(db, 'artifacts', appId, 'public', 'data', 'nucleos'),
         };
 
         // ============================================================================
@@ -171,7 +171,7 @@
           const [grades, setGrades] = useState([]);
           const [tutorings, setTutorings] = useState([]);
           const [events, setEvents] = useState([]);
-          const [nucleos, setNucleos] = useState([]); // NUEVO ESTADO: Núcleos
+          const [nucleos, setNucleos] = useState([]); 
           const [semesterConfig, setSemesterConfig] = useState({}); 
           
           const [loading, setLoading] = useState(true);
@@ -436,15 +436,15 @@
         }
 
         // ============================================================================
-        // WIDGET: CALENDARIO INSTITUCIONAL
+        // WIDGET: CALENDARIO INSTITUCIONAL CON CORRECCIÓN DE FECHAS UTC-5
         // ============================================================================
         const AcademicCalendarWidget = ({ events = [], profiles = [], semesterConfig = {} }) => {
           const now = new Date();
           
           const startDateStr = semesterConfig?.startDate || '2026-02-02';
-          const semesterStart = new Date(startDateStr + 'T00:00:00');
+          const semesterStart = new Date(startDateStr + 'T12:00:00');
           
-          const simulatedNow = now < semesterStart ? new Date('2026-03-01T00:00:00') : now;
+          const simulatedNow = now < semesterStart ? new Date('2026-03-01T12:00:00') : now;
 
           const diffTime = simulatedNow.getTime() - semesterStart.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
@@ -463,10 +463,10 @@
           const isPartialWeek = currentWeek > 0 && currentWeek % 4 === 0 && !isExcludedWeek;
 
           const upcomingEvents = (events || []).filter(e => {
-            const eDate = new Date(e.date);
+            const eDate = new Date(e.date + 'T12:00:00');
             const timeDiff = eDate - simulatedNow;
             return timeDiff >= 0 && timeDiff <= (30 * 24 * 60 * 60 * 1000);
-          }).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 3);
+          }).sort((a,b) => new Date(a.date + 'T12:00:00') - new Date(b.date + 'T12:00:00')).slice(0, 3);
 
           const currentMonth = simulatedNow.getMonth() + 1;
           const upcomingBirthdays = (profiles || []).filter(p => {
@@ -507,7 +507,7 @@
                     {upcomingEvents.map(e => (
                       <li key={e.id} className="flex justify-between items-center bg-white dark:bg-slate-700 p-3 rounded-xl border border-slate-100 dark:border-slate-600 shadow-sm">
                         <span className="font-bold text-slate-800 dark:text-white text-sm">{e.title}</span>
-                        <Badge color={e.type === 'festivo' ? 'red' : 'purple'}>{new Date(e.date).toLocaleDateString('es-ES', {month: 'short', day: 'numeric'})}</Badge>
+                        <Badge color={e.type === 'festivo' ? 'red' : 'purple'}>{new Date(e.date + 'T12:00:00').toLocaleDateString('es-ES', {month: 'short', day: 'numeric'})}</Badge>
                       </li>
                     ))}
                   </ul>
@@ -527,7 +527,7 @@
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-bold text-slate-800 dark:text-white">{p.name.split(' ')[0]}</p>
-                          <p className="text-xs text-slate-500">{new Date(p.birthDate).toLocaleDateString('es-ES', {month: 'long', day: 'numeric'})}</p>
+                          <p className="text-xs text-slate-500">{new Date(p.birthDate + 'T12:00:00').toLocaleDateString('es-ES', {month: 'long', day: 'numeric'})}</p>
                         </div>
                       </div>
                     ))}
@@ -760,6 +760,13 @@
           const myCourses = courses.filter(c => c.teacherId === profile.id || c.teacherEmail === profile.email);
           const mySessions = sessions.filter(s => s.teacherId === profile.id && s.completed);
 
+          // Obtener los perfiles completos de los docentes (unificando stubs)
+          const getFullProfilesMap = () => {
+             const map = new Map();
+             profiles.forEach(p => map.set(p.email, p));
+             return map;
+          };
+
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8">
@@ -820,7 +827,6 @@
                     const totalEstudiantes = new Set([...(course.students || []), ...(course.studentsEmails || [])]).size;
                     const retirados = (course.withdrawnStudents || []).length; 
                     
-                    // Cruce para ver si el núcleo tiene una etiqueta personalizada por admin
                     const nucleoAsignado = nucleos?.find(n => n.code === course.lineaTematica)?.name || course.lineaTematica;
 
                     return (
@@ -938,7 +944,7 @@
              if (!pastTopic || !pastDate) return showToast("Temática y Fecha son obligatorios", "error");
              try {
                  await addDoc(PATHS.sessions, {
-                     courseId: course.id, teacherId: profile.id, topic: pastTopic, status: 'completed', completed: true, date: new Date(pastDate).toISOString(), currentToken: null
+                     courseId: course.id, teacherId: profile.id, topic: pastTopic, status: 'completed', completed: true, date: new Date(pastDate + 'T12:00:00').toISOString(), currentToken: null
                  });
                  showToast("Sesión histórica creada. Usa el botón 'Editar Asist.' para marcar la asistencia.", "success");
                  setIsAddingPast(false); setPastTopic(''); setPastDate('');
@@ -973,13 +979,11 @@
               showToast(`Preparando bandeja de correo para notificar a ${absentees.length} estudiantes.`, "success");
           };
 
-          // INYECCIÓN: Guardado de Evaluación Simplificada (Pasó / No Pasó)
           const handleSaveGrade = async (studentEmail, corte, field, value) => {
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              
              let finalVal = value;
              if(field !== 'obs') {
-                 // Convertimos 'aprobado'/'reprobado' a boolean o texto explícito
                  finalVal = value; 
              }
 
@@ -1043,9 +1047,9 @@
           const teacherProfile = profiles.find(p => p.id === course.teacherId || p.email === course.teacherEmail);
 
           const startDateStr = semesterConfig?.startDate || '2026-02-02';
-          const semesterStart = new Date(startDateStr + 'T00:00:00');
+          const semesterStart = new Date(startDateStr + 'T12:00:00');
           const now = new Date();
-          const simulatedNow = now < semesterStart ? new Date('2026-03-01T00:00:00') : now;
+          const simulatedNow = now < semesterStart ? new Date('2026-03-01T12:00:00') : now;
 
           const diffTime = simulatedNow.getTime() - semesterStart.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -1518,8 +1522,8 @@
                                  const atts = attendances.filter(a => a.courseId === course.id && a.studentEmail === st.email).length;
                                  const attP = courseSessions.length === 0 ? 100 : Math.round((atts/courseSessions.length)*100);
                                  
-                                 const bottomPos = (gC1.p1 / 5.0) * 100; // Eje Y: Nota 0-5
-                                 const leftPos = attP; // Eje X: Asist 0-100
+                                 const bottomPos = (gC1.p1 / 5.0) * 100; 
+                                 const leftPos = attP; 
                                  
                                  return (
                                      <div key={i} className="absolute w-3 h-3 rounded-full bg-brand-500 shadow-brand-500/50 shadow-lg cursor-pointer hover:scale-150 hover:bg-emerald-400 transition-all z-10 group" 
@@ -1539,12 +1543,11 @@
         };
 
         // --- DASHBOARD DIRECTOR / ANALÍTICA CON COMPARATIVAS Y DESCARGA ---
-        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], tutorings = [], showToast }) => {
+        const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], tutorings = [], nucleos = [], showToast }) => {
           
           const [analyticsTab, setAnalyticsTab] = useState('global');
           
           const periods = Array.from(new Set(courses.map(c => c.period).filter(Boolean))).sort().reverse();
-          const nucleos = Array.from(new Set(courses.map(c => c.lineaTematica).filter(Boolean))).sort();
           
           const [selectedPeriod, setSelectedPeriod] = useState(periods[0] || '');
           const [comparePeriod, setComparePeriod] = useState('');
@@ -1604,7 +1607,6 @@
           });
           const maxDistrib = Math.max(...gradeDistrib, 1);
 
-          // Estadisticas por estudiante
           const studentStats = useMemo(() => {
               if (analyticsTab !== 'students') return [];
               return profiles.filter(p => p.role === 'student' && (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.email.includes(searchTerm.toLowerCase()))).map(st => {
@@ -1632,7 +1634,6 @@
               }).filter(Boolean);
           }, [analyticsTab, profiles, filteredCourses, searchTerm, sessions, attendances, grades]);
 
-          // Estadisticas de Tutorias
           const tutoringStats = useMemo(() => {
               if (analyticsTab !== 'tutorings') return { byTeacher: {}, byCourse: {} };
               const filteredTuts = tutorings.filter(t => cIdsF.includes(t.courseId));
@@ -1691,7 +1692,7 @@
                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1"><Library size={12}/> Núcleo Temático / Línea</label>
                        <select value={selectedNucleo} onChange={e=>setSelectedNucleo(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none">
                           <option value="">Todas las líneas</option>
-                          {nucleos.map(n => <option key={n} value={n}>{n}</option>)}
+                          {nucleos.map(n => <option key={n.code} value={n.code}>{n.name}</option>)}
                        </select>
                     </div>
                     <div className="flex items-center justify-center shrink-0 mt-4 sm:mt-0 font-black text-slate-300 px-4">VS</div>
@@ -1771,7 +1772,7 @@
                          </div>
                       </div>
                       <div className="overflow-x-auto">
-                         <table className="w-full text-left text-sm">
+                         <table className="w-full text-left text-sm min-w-[700px]">
                             <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest"><th className="pb-3">Estudiante</th><th className="pb-3">Programa</th><th className="pb-3 text-center">Materias</th><th className="pb-3 text-center">Asistencia %</th><th className="pb-3 text-center">Nota Sistema Promedio</th></tr></thead>
                             <tbody>
                                {studentStats.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-slate-400">No hay datos en esta categoría.</td></tr>}
@@ -1838,7 +1839,6 @@
           
           const [roleFilter, setRoleFilter] = useState('all');
 
-          // INYECCIÓN: Formulario Gestión de Núcleos
           const [newNucleoCode, setNewNucleoCode] = useState('');
           const [newNucleoName, setNewNucleoName] = useState('');
 
@@ -1881,7 +1881,7 @@
                         const schedule = `${scheduleDays.join(', ')} ${row['HORA INI'] || ''}-${row['HORA FIN'] || ''}`;
                         
                         const rawMateria = row['MATERIA'] || '';
-                        const lineaTematica = rawMateria.replace(/[^A-Za-z]/g, ''); // Default Linea
+                        const lineaTematica = rawMateria.replace(/[^A-Za-z]/g, '');
 
                         if (!aggregatedCourses[nrcStr]) {
                             aggregatedCourses[nrcStr] = {
@@ -1891,7 +1891,7 @@
                                 code: `${row['MATERIA'] || ''}${row['CURSO'] || ''}`,
                                 lineaTematica: lineaTematica,
                                 faculty: row['COLL_NAME'] || '',
-                                department: row['DEPT_NAME'] || '', // Inyección: Departamento real
+                                department: row['DEPT_NAME'] || '', 
                                 teacherEmail: (row['EMAIL'] || '').toLowerCase(),
                                 teacherName: `${row['NOMBRE'] || ''} ${row['APELLIDOS'] || ''}`.trim() || row['ID DOCENTE'],
                                 schedule: schedule,
@@ -2228,7 +2228,7 @@
                                 <li key={e.id} className="py-3 flex justify-between items-center">
                                    <div>
                                       <p className="font-bold text-slate-800 dark:text-white">{e.title}</p>
-                                      <p className="text-xs text-slate-500">{new Date(e.date).toLocaleDateString('es-ES', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
+                                      <p className="text-xs text-slate-500">{new Date(e.date + 'T12:00:00').toLocaleDateString('es-ES', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>
                                    </div>
                                    <div className="flex items-center gap-3">
                                       <Badge color={e.type === 'festivo' ? 'red' : 'purple'}>{e.type}</Badge>
