@@ -83,7 +83,7 @@
           AlertTriangle, CheckCircle, XCircle, Moon, Sun,
           UploadCloud, BarChart3, Clock, ShieldAlert, FileSpreadsheet, Calendar,
           GraduationCap, ClipboardList, PieChart, MapPin, LogOut, Save,
-          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning, Filter, Library, Search, Layers, ListChecks
+          CalendarDays, Gift, PartyPopper, UserCog, Trash2, Bell, Sliders, Hand, UserCircle, Target, TrendingUp, Activity, UserMinus, Timer, MessageSquare, Download, MailWarning, Filter, Library, Search, Layers, ListChecks, BarChart2, Zap
         } from 'lucide-react';
 
         // ============================================================================
@@ -265,20 +265,15 @@
                 else if (email.includes('director') || email.includes('coordinador')) role = 'director';
                 else if (email.includes('docente') || email.includes('profesor') || courses.some(c => c.teacherEmail === email)) role = 'teacher';
 
-                const today = new Date();
-                const randomMonth = Math.floor(Math.random() * 12);
-                const randomDay = Math.floor(Math.random() * 28) + 1;
-                const simulatedBirthDate = `${today.getFullYear() - 20}-${(randomMonth+1).toString().padStart(2,'0')}-${randomDay.toString().padStart(2,'0')}`;
-
                 await setDoc(profileRef, {
                   name: loggedUser.displayName || 'Usuario',
                   email: email,
                   role: role,
                   photoURL: loggedUser.photoURL,
                   createdAt: nowISO,
-                  campus: 'Bucaramanga',
+                  campus: '', // Erradicados datos simulados
                   status: 'Activo',
-                  birthDate: simulatedBirthDate,
+                  birthDate: '', 
                   accessLogs: [nowISO] 
                 });
               } else {
@@ -426,7 +421,7 @@
                 {currentView === 'dashboard' && <DashboardRouter profile={currentUserProfile} courses={courses} sessions={sessions} attendances={attendances} tutorings={tutorings} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} />}
                 {currentView === 'profile' && <ProfileView profile={currentUserProfile} db={db} appId={appId} showToast={showToast} />}
                 {currentView === 'courses' && !selectedCourse && <CoursesListView profile={currentUserProfile} courses={courses} profiles={profiles} nucleos={nucleos} onSelectCourse={(c) => { setSelectedCourse(c); setCurrentView('course-detail'); }} />}
-                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} semesterConfig={semesterConfig} />}
+                {currentView === 'course-detail' && selectedCourse && <CourseDetailView profile={currentUserProfile} course={selectedCourse} sessions={sessions} attendances={attendances} grades={grades} tutorings={tutorings} profiles={profiles} showToast={showToast} onBack={() => setCurrentView('courses')} db={db} appId={appId} semesterConfig={semesterConfig} nucleos={nucleos}/>}
                 {currentView === 'admin' && <AdminView showToast={showToast} profiles={profiles} courses={courses} db={db} events={events} semesterConfig={semesterConfig} appId={appId} grades={grades} attendances={attendances} nucleos={nucleos} />}
                 {currentView === 'analytics' && <DirectorView courses={courses} sessions={sessions} attendances={attendances} events={events} profiles={profiles} semesterConfig={semesterConfig} grades={grades} tutorings={tutorings} nucleos={nucleos} showToast={showToast} />}
               </main>
@@ -436,7 +431,7 @@
         }
 
         // ============================================================================
-        // WIDGET: CALENDARIO INSTITUCIONAL CON CORRECCIÓN DE FECHAS UTC-5
+        // WIDGET: CALENDARIO INSTITUCIONAL
         // ============================================================================
         const AcademicCalendarWidget = ({ events = [], profiles = [], semesterConfig = {} }) => {
           const now = new Date();
@@ -576,6 +571,87 @@
         };
 
         // ============================================================================
+        // MOTOR GRÁFICO NATIVO (NO DEPENDENCIAS EXTRA)
+        // ============================================================================
+        const NativeBarChart = ({ data, metricName }) => {
+            if(!data || data.length === 0) return <div className="text-center p-10 text-slate-500 italic">No hay datos para graficar.</div>;
+            const max = Math.max(...data.map(d=>d.value), 1);
+            return (
+                <div className="w-full h-64 flex items-end justify-around gap-2 mt-4 px-4 relative">
+                   {data.map((d,i) => (
+                       <div key={i} className="relative flex flex-col justify-end w-full h-full group">
+                           <div className="bg-brand-500 hover:bg-brand-400 rounded-t-md transition-all grow-up relative" style={{height: `${(d.value / max) * 100}%`}}>
+                               <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-black px-3 py-2 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                                  {d.name}: {d.value}
+                               </div>
+                           </div>
+                           <span className="text-[10px] font-bold text-slate-500 mt-2 truncate text-center max-w-full overflow-hidden" title={d.name}>{d.name}</span>
+                       </div>
+                   ))}
+                </div>
+            )
+        };
+
+        const NativeScatterChart = ({ data, metricX, metricY }) => {
+            if(!data || data.length === 0) return <div className="text-center p-10 text-slate-500">Insuficientes datos.</div>;
+            const maxX = Math.max(...data.map(d=>d.x), 100);
+            const maxY = Math.max(...data.map(d=>d.y), 5);
+            return (
+                <div className="w-full h-80 relative bg-slate-900 dark:bg-slate-950 rounded-2xl p-8 shadow-inner mt-4">
+                     <div className="absolute left-6 bottom-8 top-8 border-l-2 border-slate-700"></div>
+                     <div className="absolute left-6 bottom-8 right-6 border-b-2 border-slate-700"></div>
+                     <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-slate-500 text-xs font-bold uppercase tracking-widest">{metricX} &rarr;</span>
+                     <span className="absolute left-1 top-1/2 -translate-y-1/2 -rotate-90 text-slate-500 text-xs font-bold uppercase tracking-widest">&larr; {metricY}</span>
+
+                     {data.map((d, i) => (
+                         <div key={i} className="absolute w-3 h-3 rounded-full bg-brand-500 shadow-brand-500/50 shadow-lg cursor-pointer hover:scale-150 hover:bg-emerald-400 transition-all z-10 group" 
+                              style={{ bottom: `calc(2rem + ${(d.y / maxY) * 80}%)`, left: `calc(1.5rem + ${(d.x / maxX) * 90}%)` }}>
+                             <div className="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white text-slate-900 text-xs font-black p-2 rounded shadow-xl pointer-events-none whitespace-nowrap z-20">
+                                {d.name}<br/>{metricX}: {d.x} | {metricY}: {d.y}
+                             </div>
+                         </div>
+                     ))}
+                </div>
+            )
+        };
+
+        const NativeRadarChart = ({ data }) => {
+            if(!data || data.length < 3) return <div className="text-center p-10 text-slate-500">El radar requiere mínimo 3 dimensiones de agrupación.</div>;
+            const max = Math.max(...data.map(d=>d.value), 1);
+            const cx = 150, cy = 150, r = 100;
+            const len = data.length;
+
+            const points = data.map((d, i) => {
+                const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                const valR = (d.value / max) * r;
+                return `${cx + valR * Math.cos(angle)},${cy + valR * Math.sin(angle)}`;
+            }).join(' ');
+
+            return (
+                <div className="w-full flex justify-center mt-4">
+                    <svg viewBox="0 0 300 300" className="w-64 h-64 drop-shadow-xl overflow-visible">
+                        {data.map((_, i) => {
+                            const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                            return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle)} y2={cy + r * Math.sin(angle)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4" />
+                        })}
+                        <polygon points={points} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="grow-up" style={{transformOrigin:'center'}}/>
+                        {data.map((d, i) => {
+                            const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                            const tx = cx + (r + 20) * Math.cos(angle);
+                            const ty = cy + (r + 20) * Math.sin(angle);
+                            return (
+                                <text key={`t${i}`} x={tx} y={ty} fontSize="8" fill="#64748b" textAnchor="middle" alignmentBaseline="middle" className="font-bold uppercase tracking-widest group">
+                                    {d.name.substring(0,10)}
+                                    <title>{d.name}: {d.value}</title>
+                                </text>
+                            )
+                        })}
+                    </svg>
+                </div>
+            )
+        };
+
+        // ============================================================================
         // 5. MODULAR VIEWS
         // ============================================================================
         
@@ -655,6 +731,7 @@
                          <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Campus / Sede Principal</label>
                             <select value={formData.campus} onChange={e=>setFormData({...formData, campus: e.target.value})} className="w-full p-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none cursor-pointer">
+                               <option value="">No definido</option>
                                <option value="Bucaramanga">Bucaramanga</option>
                                <option value="Bogotá">Bogotá</option>
                                <option value="San Gil">San Gil</option>
@@ -759,13 +836,6 @@
         const TeacherDashboard = ({ profile, courses, sessions, tutorings, events, profiles, semesterConfig }) => {
           const myCourses = courses.filter(c => c.teacherId === profile.id || c.teacherEmail === profile.email);
           const mySessions = sessions.filter(s => s.teacherId === profile.id && s.completed);
-
-          // Obtener los perfiles completos de los docentes (unificando stubs)
-          const getFullProfilesMap = () => {
-             const map = new Map();
-             profiles.forEach(p => map.set(p.email, p));
-             return map;
-          };
 
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
@@ -1285,7 +1355,7 @@
                 </div>
               )}
 
-              {/* INYECCIÓN: TAB CALIFICACIONES (EVALUACIÓN SIMPLIFICADA DOCENTE + OBSERVACIONES) */}
+              {/* TAB CALIFICACIONES (COMPLETADO) */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
                   {profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director' ? (
@@ -1467,7 +1537,7 @@
                 </div>
               )}
 
-              {/* INYECCIÓN: DATA SCIENCE POR MATERIA (SCATTER & DOUGHNUT) */}
+              {/* INYECCIÓN: DATA SCIENCE POR MATERIA */}
               {activeTab === 'analytics' && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 slide-up">
                       <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-emerald-500">
@@ -1509,7 +1579,7 @@
                       <Card className="md:col-span-3">
                           <h3 className="font-black text-xl mb-6">Distribución de Notas del Sistema vs Asistencia</h3>
                           <div className="flex flex-col items-center justify-center bg-slate-900 dark:bg-slate-950 p-8 rounded-2xl relative h-64 shadow-2xl">
-                             <p className="absolute top-4 left-4 text-slate-400 font-bold text-xs uppercase tracking-widest">Gráfico de Dispersión (Simulado)</p>
+                             <p className="absolute top-4 left-4 text-slate-400 font-bold text-xs uppercase tracking-widest">Gráfico de Dispersión (Datos Reales)</p>
                              <div className="absolute left-6 bottom-8 top-12 border-l-2 border-slate-700"></div>
                              <div className="absolute left-6 bottom-8 right-6 border-b-2 border-slate-700"></div>
                              <span className="absolute bottom-2 text-slate-500 text-xs font-bold">Asistencia (%) &rarr;</span>
@@ -1542,7 +1612,7 @@
           );
         };
 
-        // --- DASHBOARD DIRECTOR / ANALÍTICA CON COMPARATIVAS Y DESCARGA ---
+        // --- DASHBOARD DIRECTOR / ANALÍTICA CON GENERADOR CUSTOM ---
         const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], tutorings = [], nucleos = [], showToast }) => {
           
           const [analyticsTab, setAnalyticsTab] = useState('global');
@@ -1651,7 +1721,6 @@
               return { byTeacher: byT, byCourse: byC, total: filteredTuts.length };
           }, [analyticsTab, tutorings, cIdsF, profiles, filteredCourses]);
 
-
           const handleDownloadDB = () => {
              showToast("Generando copias de seguridad Excel...", "info");
              const wb = XLSX.utils.book_new();
@@ -1669,12 +1738,113 @@
              showToast("Descarga completada con éxito", "success");
           };
 
+          // INYECCIÓN: GENERADOR CUSTOM DE GRÁFICOS REALES
+          const CustomReportBuilder = () => {
+              const [cType, setCType] = useState('bar');
+              const [dim, setDim] = useState('faculty'); 
+              const [metric, setMetric] = useState('attRate'); 
+
+              const getCustomData = () => {
+                  const cMetrics = filteredCourses.map(c => {
+                      const cSess = sessions.filter(s => s.courseId === c.id && s.completed).length;
+                      const cAtts = attendances.filter(a => a.courseId === c.id).length;
+                      const cSts = new Set([...(c.students || []), ...(c.studentsEmails || [])]).size;
+                      const withdrawn = (c.withdrawnStudents || []).length;
+                      const exp = cSess * (cSts - withdrawn);
+                      const attR = exp === 0 ? 0 : (cAtts/exp)*100;
+                      
+                      const cGrds = grades.filter(g => g.courseId === c.id && g.corte === 1);
+                      let sg = 0, cg = 0, passed = 0, teval = 0;
+                      cGrds.forEach(g => {
+                          if(g.p1 !== undefined) { sg+=g.p1; cg++; }
+                          if(g.status) { teval++; if(g.status==='aprobado') passed++; }
+                      });
+                      const pR = teval === 0 ? 0 : (passed/teval)*100;
+                      const lH = sessions.filter(s => s.courseId === c.id && s.status === 'completed' && s.completed === false).length;
+
+                      return { ...c, attRate: attR, passRate: pR, avgGrade: cg===0?0:sg/cg, enrolled: cSts-withdrawn, lostHours: lH };
+                  });
+
+                  const grouped = {};
+                  cMetrics.forEach(c => {
+                      let key = c[dim] || 'Sin Asignar';
+                      if(dim === 'lineaTematica' && c[dim]) {
+                          key = nucleos.find(n=>n.code === c[dim])?.name || c[dim];
+                      }
+                      if(!grouped[key]) grouped[key] = { c: 0, sum: 0 };
+                      grouped[key].c++;
+                      grouped[key].sum += c[metric] || 0;
+                  });
+
+                  return Object.keys(grouped).map(k => ({
+                      name: k,
+                      value: grouped[k].c === 0 ? 0 : Number((grouped[k].sum / grouped[k].c).toFixed(1))
+                  })).sort((a,b)=>b.value - a.value).slice(0, 10);
+              };
+
+              const chartData = useMemo(() => getCustomData(), [dim, metric, filteredCourses]);
+
+              return (
+                  <Card className="slide-up mt-6 border-t-[4px] border-t-brand-500">
+                     <h3 className="font-black text-2xl mb-2 flex items-center gap-2"><BarChart2 className="text-brand-500"/> Generador Dinámico de Gráficas</h3>
+                     <p className="text-slate-500 mb-6 font-medium">Control total de métricas reales para cruce y minería de datos educativos.</p>
+                     
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <div>
+                           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Gráfico</label>
+                           <select value={cType} onChange={e=>setCType(e.target.value)} className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none text-sm">
+                              <option value="bar">Barras Horizontales</option>
+                              <option value="radar">Araña / Radar</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Eje X / Agrupar Por</label>
+                           <select value={dim} onChange={e=>setDim(e.target.value)} className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none text-sm">
+                              <option value="faculty">Facultad</option>
+                              <option value="department">Departamento</option>
+                              <option value="lineaTematica">Línea / Núcleo Temático</option>
+                              <option value="name">Curso Específico</option>
+                           </select>
+                        </div>
+                        <div>
+                           <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Eje Y / Métrica a Evaluar</label>
+                           <select value={metric} onChange={e=>setMetric(e.target.value)} className="w-full p-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 font-bold outline-none text-sm">
+                              <option value="attRate">Tasa de Asistencia (%)</option>
+                              <option value="passRate">Tasa de Aprobación (%)</option>
+                              <option value="avgGrade">Nota Promedio (0-5)</option>
+                              <option value="lostHours">Horas Perdidas Promedio</option>
+                              <option value="enrolled">Promedio Inscritos x Grupo</option>
+                           </select>
+                        </div>
+                     </div>
+
+                     <div className="bg-slate-900 dark:bg-slate-950 p-6 rounded-2xl shadow-inner min-h-[350px]">
+                        {cType === 'bar' && <NativeBarChart data={chartData} metricName={metric} />}
+                        {cType === 'radar' && <NativeRadarChart data={chartData} />}
+                     </div>
+
+                     {chartData.length > 0 && (
+                         <div className="mt-6 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 p-4 rounded-xl flex items-start gap-3">
+                             <Zap className="text-brand-500 shrink-0 mt-1"/>
+                             <div>
+                                 <h4 className="font-black text-brand-800 dark:text-brand-300">Insights Detectados por Inteligencia de Datos:</h4>
+                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-400 mt-1">
+                                     El máximo valor recae sobre <strong className="text-brand-600 dark:text-white">"{chartData[0].name}"</strong> con <strong className="text-brand-600 dark:text-white">{chartData[0].value}</strong>.
+                                     Se sugiere prestar atención a <strong className="text-rose-500">"{chartData[chartData.length-1].name}"</strong> que presenta el valor más bajo de su agrupación ({chartData[chartData.length-1].value}).
+                                 </p>
+                             </div>
+                         </div>
+                     )}
+                  </Card>
+              );
+          };
+
           return (
             <div className="space-y-8 slide-up max-w-7xl mx-auto">
               <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                 <div>
                    <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional (Data Science)</h1>
-                   <p className="text-slate-500 font-medium mt-2">Filtros multidimensionales, comparativas y descargas de base de datos.</p>
+                   <p className="text-slate-500 font-medium mt-2">Filtros multidimensionales, generador de gráficas propio y descargas en Excel.</p>
                 </div>
                 <Button onClick={handleDownloadDB} icon={Download} variant="secondary">Descargar Excel (Backup)</Button>
               </header>
@@ -1708,6 +1878,7 @@
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
                 <button onClick={()=>setAnalyticsTab('global')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='global' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Resumen Global</button>
+                <button onClick={()=>setAnalyticsTab('custom')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='custom' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Generador Gráficas Custom</button>
                 <button onClick={()=>setAnalyticsTab('students')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='students' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Desempeño Estudiantes</button>
                 <button onClick={()=>setAnalyticsTab('tutorings')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${analyticsTab==='tutorings' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}>Estadísticas de Tutorías</button>
               </div>
@@ -1722,7 +1893,7 @@
                                {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.courses} en {comparePeriod}</p>}
                             </Card>
                             <Card className="border-t-4 border-emerald-500">
-                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Evaluación Cualitativa (C1)</p>
+                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Aprobación (C1)</p>
                                <h3 className="text-4xl font-black">{m1.passRate}%</h3>
                                <p className="text-[10px] font-bold mt-1 text-emerald-600/70">Aprobados por el docente</p>
                                {m2 && <p className="text-xs font-bold mt-1 text-slate-400">VS {m2.passRate}% en {comparePeriod}</p>}
@@ -1761,6 +1932,8 @@
                      </div>
                   </div>
               )}
+
+              {analyticsTab === 'custom' && <CustomReportBuilder />}
 
               {analyticsTab === 'students' && (
                   <Card className="slide-up">
@@ -2260,9 +2433,9 @@
                        </div>
                        
                        <div className="mb-8">
-                          <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Semanas Excluidas</label>
+                          <label className="block font-bold text-slate-500 text-sm mb-1 uppercase tracking-widest">Semanas Excluidas (Semanas sin carga académica)</label>
                           <input type="text" value={semExcluded} onChange={e=>setSemExcluded(e.target.value)} placeholder="Ej: 8, 14 (Separadas por comas)" className="w-full px-4 py-3 border-2 rounded-xl bg-slate-50 dark:bg-slate-700 focus:border-brand-500 outline-none"/>
-                          <p className="text-xs text-slate-400 mt-2 font-bold">Ingresa el número de la semana calendario que no debe contarse (ej. Semana Santa = 9).</p>
+                          <p className="text-xs text-slate-400 mt-2 font-bold">Ingresa el número de la semana calendario que no debe contarse (ej. Semana Santa = 9). El motor ajustará el cálculo para que las semanas "activas" sean transparentes.</p>
                        </div>
                        
                        <Button onClick={handleSaveSemester} className="w-full md:w-auto" icon={Save}>Guardar Configuración en DB</Button>
