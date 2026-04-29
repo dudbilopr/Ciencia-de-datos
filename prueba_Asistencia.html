@@ -135,14 +135,6 @@
             return 2;
         };
 
-        const getDefinitive = (g) => {
-            let sum = 0; let count = 0;
-            if (g.p1 !== undefined && g.p1 !== '') { sum += parseFloat(g.p1); count++; }
-            if (g.p2 !== undefined && g.p2 !== '') { sum += parseFloat(g.p2); count++; }
-            if (g.p3 !== undefined && g.p3 !== '') { sum += parseFloat(g.p3); count++; }
-            return count > 0 ? (sum / count).toFixed(1) : '--';
-        };
-
         // ============================================================================
         // 2. ATOMIC UI COMPONENTS
         // ============================================================================
@@ -321,6 +313,9 @@
             setRoleOverride(null);
           };
 
+          // ============================================================================
+          // 4. LAYOUT ROUTER
+          // ============================================================================
           if (loading) return (
             <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 fade-in">
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-brand-600 mb-4"></div>
@@ -1109,21 +1104,19 @@
               showToast(`Preparando bandeja de correo para notificar a ${absentees.length} estudiantes.`, "success");
           };
 
+          // INYECCIÓN: Lógica adaptada para Evaluación cualitativa (paso/perdio)
           const handleSaveGrade = async (studentEmail, corte, field, value) => {
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              
              let finalVal = value;
-             if(field !== 'obs' && field !== 'status') {
-                 finalVal = value; 
-             }
-
+             
              try {
                if(existingGrade) {
                  await updateDoc(doc(PATHS.grades, existingGrade.id), { [field]: finalVal });
                } else {
                  await addDoc(PATHS.grades, { courseId: course.id, studentEmail: studentEmail, corte, [field]: finalVal });
                }
-               showToast(field === 'obs' ? "Observación guardada." : "Estado de evaluación actualizado.", "success");
+               showToast(field === 'obs' ? "Observación guardada." : "Evaluación actualizada.", "success");
              } catch(e) { showToast("Error al guardar", "error"); }
           };
 
@@ -1231,11 +1224,8 @@
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
                 <button onClick={()=>setActiveTab('attendance')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='attendance' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><QrCode className="inline mr-2" size={18}/> Asistencia</button>
-                <button onClick={()=>setActiveTab('grades')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='grades' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><ClipboardList className="inline mr-2" size={18}/> Evaluaciones</button>
+                <button onClick={()=>setActiveTab('grades')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='grades' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><ClipboardList className="inline mr-2" size={18}/> Evaluaciones y Notas</button>
                 <button onClick={()=>setActiveTab('tutoring')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='tutoring' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="inline mr-2" size={18}/> Tutorías</button>
-                {(profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director') && (
-                    <button onClick={()=>setActiveTab('analytics')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${activeTab==='analytics' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Activity className="inline mr-2" size={18}/> Analítica del Curso</button>
-                )}
               </div>
 
               {/* TAB ASISTENCIA */}
@@ -1438,32 +1428,34 @@
                 </div>
               )}
 
-              {/* TAB CALIFICACIONES */}
+              {/* INYECCIÓN: TAB CALIFICACIONES (EVALUACIÓN SIMPLIFICADA DOCENTE + OBSERVACIONES) */}
               {activeTab === 'grades' && (
                 <div className="space-y-6 mt-6">
                   {profile.role === 'teacher' || profile.role === 'admin' || profile.role === 'director' ? (
                      <Card>
-                       <h3 className="font-black text-xl mb-6">Centro de Evaluaciones (50/50)</h3>
-                       <p className="text-sm text-slate-500 mb-6">Las notas (P1/P2/P3) provienen exclusivamente de la carga de Excel oficial. Aquí determinas si el estudiante aprobó el corte y agregas observaciones de soporte.</p>
+                       <h3 className="font-black text-xl mb-6">Centro de Evaluaciones cualitativas (50/50)</h3>
+                       <p className="text-sm text-slate-500 mb-6">Las notas de Sistema provienen exclusivamente de la carga de Excel oficial. Aquí determinas el estado del estudiante y agregas observaciones.</p>
                        <div className="overflow-x-auto">
                          <table className="w-full text-left min-w-[1000px]">
                             <thead>
                               <tr className="border-b-2 text-slate-400 text-[10px] uppercase tracking-widest bg-slate-50 dark:bg-slate-800">
                                  <th className="p-3">Estudiante</th>
-                                 <th className="p-3 text-center border-l">Estado</th>
-                                 <th className="p-3 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" colSpan="3">Corte 1 (50%)</th>
-                                 <th className="p-3 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" colSpan="3">Corte 2 (50%)</th>
+                                 <th className="p-3 text-center border-l">Estado Matrícula</th>
+                                 <th className="p-3 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" colSpan="4">Corte 1 (50%)</th>
+                                 <th className="p-3 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" colSpan="4">Corte 2 (50%)</th>
                               </tr>
                               <tr className="border-b-2 text-slate-400 text-[10px] uppercase tracking-widest">
                                  <th className="p-3"></th>
                                  <th className="p-3 text-center border-l"></th>
                                  
-                                 <th className="p-2 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" title="Nota Promedio del Sistema (Inmutable)">P.Sist.</th>
-                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20 font-bold">Evaluación</th>
+                                 <th className="p-2 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" title="Nota del Sistema (Inmutable)">P.Sist.</th>
+                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20 font-bold">Evaluación 1</th>
+                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20 font-bold">Evaluación 2</th>
                                  <th className="p-2 text-left bg-blue-50/50 dark:bg-blue-900/20">Observaciones Docente (Opcional)</th>
 
-                                 <th className="p-2 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" title="Nota Promedio del Sistema (Inmutable)">P.Sist.</th>
-                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20 font-bold">Evaluación</th>
+                                 <th className="p-2 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" title="Nota del Sistema (Inmutable)">P.Sist.</th>
+                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20 font-bold">Evaluación 1</th>
+                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20 font-bold">Evaluación 2</th>
                                  <th className="p-2 text-left bg-purple-50/50 dark:bg-purple-900/20">Observaciones Docente (Opcional)</th>
                               </tr>
                             </thead>
@@ -1473,9 +1465,6 @@
                                 const gC2 = grades.find(g => g.courseId === course.id && g.studentEmail === student.email && g.corte === 2) || {};
                                 const isWithdrawn = (course.withdrawnStudents || []).includes(student.email);
                                 
-                                const defC1 = getDefinitive(gC1);
-                                const defC2 = getDefinitive(gC2);
-
                                 return (
                                   <tr key={student.email} className={`border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isWithdrawn ? 'opacity-50' : ''}`}>
                                     <td className="p-3">
@@ -1489,29 +1478,43 @@
                                     </td>
                                     
                                     {/* CORTE 1 */}
-                                    <td className="p-2 text-center border-l bg-blue-50/20 font-black text-slate-600 dark:text-slate-300">{defC1}</td>
+                                    <td className="p-2 text-center border-l bg-blue-50/20 font-black text-slate-600 dark:text-slate-300">{gC1.p1 !== undefined ? gC1.p1 : '--'}</td>
                                     <td className="p-2 text-center bg-blue-50/20">
-                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC1.status || ''} onChange={(e)=>handleSaveGrade(student.email, 1, 'status', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
-                                            <option value="">Pendiente</option>
-                                            <option value="aprobado">✅ Aprobó</option>
-                                            <option value="reprobado">❌ Reprobó</option>
+                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC1.e1 || 'paso'} onChange={(e)=>handleSaveGrade(student.email, 1, 'e1', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
+                                            <option value="paso">✅ Pasó</option>
+                                            <option value="perdio">❌ Perdió</option>
+                                            <option value="no_presento">⚠️ No Presentó</option>
+                                        </select>
+                                    </td>
+                                    <td className="p-2 text-center bg-blue-50/20">
+                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC1.e2 || 'paso'} onChange={(e)=>handleSaveGrade(student.email, 1, 'e2', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
+                                            <option value="paso">✅ Pasó</option>
+                                            <option value="perdio">❌ Perdió</option>
+                                            <option value="no_presento">⚠️ No Presentó</option>
                                         </select>
                                     </td>
                                     <td className="p-2 text-left bg-blue-50/20">
-                                        <input type="text" placeholder="Observación..." defaultValue={gC1.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
+                                        <input type="text" placeholder="Observación libre..." defaultValue={gC1.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
                                     </td>
 
                                     {/* CORTE 2 */}
-                                    <td className="p-2 text-center border-l bg-purple-50/20 font-black text-slate-600 dark:text-slate-300">{defC2}</td>
+                                    <td className="p-2 text-center border-l bg-purple-50/20 font-black text-slate-600 dark:text-slate-300">{gC2.p1 !== undefined ? gC2.p1 : '--'}</td>
                                     <td className="p-2 text-center bg-purple-50/20">
-                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC2.status || ''} onChange={(e)=>handleSaveGrade(student.email, 2, 'status', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
-                                            <option value="">Pendiente</option>
-                                            <option value="aprobado">✅ Aprobó</option>
-                                            <option value="reprobado">❌ Reprobó</option>
+                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC2.e1 || 'paso'} onChange={(e)=>handleSaveGrade(student.email, 2, 'e1', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
+                                            <option value="paso">✅ Pasó</option>
+                                            <option value="perdio">❌ Perdió</option>
+                                            <option value="no_presento">⚠️ No Presentó</option>
+                                        </select>
+                                    </td>
+                                    <td className="p-2 text-center bg-purple-50/20">
+                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC2.e2 || 'paso'} onChange={(e)=>handleSaveGrade(student.email, 2, 'e2', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
+                                            <option value="paso">✅ Pasó</option>
+                                            <option value="perdio">❌ Perdió</option>
+                                            <option value="no_presento">⚠️ No Presentó</option>
                                         </select>
                                     </td>
                                     <td className="p-2 text-left bg-purple-50/20">
-                                        <input type="text" placeholder="Observación..." defaultValue={gC2.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
+                                        <input type="text" placeholder="Observación libre..." defaultValue={gC2.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
                                     </td>
                                   </tr>
                                 )
@@ -1526,18 +1529,19 @@
                          <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 1 (50%)</h3>
                          {(() => {
                             const myGrade = grades.find(g => g.courseId === course.id && g.studentEmail === profile.email && g.corte === 1) || {};
-                            const def = getDefinitive(myGrade);
                             return (
                               <div className="space-y-4">
                                 <div className="flex justify-between font-bold text-slate-600 items-center">
-                                    <span>Nota Promedio del Sistema (Oficial)</span>
-                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{def}</span>
+                                    <span>Nota Sistema Oficial</span>
+                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{myGrade.p1 !== undefined ? myGrade.p1 : '--'}</span>
                                 </div>
-                                <div className="flex justify-between font-black text-lg pt-4 border-t items-center">
-                                    <span>Evaluación Docente</span>
-                                    <span>
-                                        {myGrade.status === 'aprobado' ? <Badge color="green">✅ APROBADO</Badge> : myGrade.status === 'reprobado' ? <Badge color="red">❌ REPROBADO</Badge> : <Badge color="gray">Pendiente</Badge>}
-                                    </span>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="font-bold text-slate-500">Evaluación 1</span>
+                                    <span>{!myGrade.e1 || myGrade.e1 === 'paso' ? <Badge color="green">✅ Pasó</Badge> : myGrade.e1 === 'perdio' ? <Badge color="red">❌ Perdió</Badge> : <Badge color="yellow">⚠️ No Presentó</Badge>}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="font-bold text-slate-500">Evaluación 2</span>
+                                    <span>{!myGrade.e2 || myGrade.e2 === 'paso' ? <Badge color="green">✅ Pasó</Badge> : myGrade.e2 === 'perdio' ? <Badge color="red">❌ Perdió</Badge> : <Badge color="yellow">⚠️ No Presentó</Badge>}</span>
                                 </div>
                                 {myGrade.obs && <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300"><strong>Observación Docente:</strong><br/> {myGrade.obs}</div>}
                               </div>
@@ -1548,18 +1552,19 @@
                          <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 2 (50%)</h3>
                          {(() => {
                             const myGrade = grades.find(g => g.courseId === course.id && g.studentEmail === profile.email && g.corte === 2) || {};
-                            const def = getDefinitive(myGrade);
                             return (
                               <div className="space-y-4">
                                 <div className="flex justify-between font-bold text-slate-600 items-center">
-                                    <span>Nota Promedio del Sistema (Oficial)</span>
-                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{def}</span>
+                                    <span>Nota Sistema Oficial</span>
+                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{myGrade.p1 !== undefined ? myGrade.p1 : '--'}</span>
                                 </div>
-                                <div className="flex justify-between font-black text-lg pt-4 border-t items-center">
-                                    <span>Evaluación Docente</span>
-                                    <span>
-                                        {myGrade.status === 'aprobado' ? <Badge color="green">✅ APROBADO</Badge> : myGrade.status === 'reprobado' ? <Badge color="red">❌ REPROBADO</Badge> : <Badge color="gray">Pendiente</Badge>}
-                                    </span>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="font-bold text-slate-500">Evaluación 1</span>
+                                    <span>{!myGrade.e1 || myGrade.e1 === 'paso' ? <Badge color="green">✅ Pasó</Badge> : myGrade.e1 === 'perdio' ? <Badge color="red">❌ Perdió</Badge> : <Badge color="yellow">⚠️ No Presentó</Badge>}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="font-bold text-slate-500">Evaluación 2</span>
+                                    <span>{!myGrade.e2 || myGrade.e2 === 'paso' ? <Badge color="green">✅ Pasó</Badge> : myGrade.e2 === 'perdio' ? <Badge color="red">❌ Perdió</Badge> : <Badge color="yellow">⚠️ No Presentó</Badge>}</span>
                                 </div>
                                 {myGrade.obs && <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300"><strong>Observación Docente:</strong><br/> {myGrade.obs}</div>}
                               </div>
@@ -1644,78 +1649,6 @@
                    </Card>
                 </div>
               )}
-
-              {/* INYECCIÓN: DATA SCIENCE POR MATERIA */}
-              {activeTab === 'analytics' && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 slide-up">
-                      <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-emerald-500">
-                          <h3 className="font-black text-xl mb-2">Asistencia Global del Grupo</h3>
-                          <div className="text-6xl font-black text-emerald-500 my-4">{courseAttendanceRate}%</div>
-                          <p className="text-sm text-slate-500 font-bold">Asistencias vs Expectativa Total</p>
-                      </Card>
-                      <Card className="flex flex-col justify-center text-center py-10 border-t-[4px] border-t-rose-500">
-                          <h3 className="font-black text-xl mb-2">Tasa de Deserción</h3>
-                          <div className="text-6xl font-black text-rose-500 my-4">
-                              {totalEstudiantes > 0 ? Math.round(((course.withdrawnStudents || []).length / totalEstudiantes) * 100) : 0}%
-                          </div>
-                          <p className="text-sm text-slate-500 font-bold">Cancelaciones institucionales</p>
-                      </Card>
-                      <Card className="flex flex-col items-center justify-center text-center py-8">
-                         <h3 className="font-black text-xl mb-6">Aprobación (C1)</h3>
-                         {(() => {
-                             let ap = 0, rep = 0;
-                             grades.filter(g=>g.courseId===course.id && g.corte===1).forEach(g => {
-                                 if(g.status === 'aprobado') ap++;
-                                 else if (g.status === 'reprobado') rep++;
-                             });
-                             const tot = ap + rep;
-                             const apP = tot===0 ? 0 : Math.round((ap/tot)*100);
-                             return (
-                                 <div className="flex flex-col items-center w-full">
-                                    <div className="doughnut-chart mb-4 shadow-inner" style={{background: `conic-gradient(#10b981 0% ${apP}%, #f43f5e ${apP}% 100%)`}}>
-                                       <div className="absolute inset-0 flex items-center justify-center font-black text-2xl text-slate-800 dark:text-white z-10">{apP}%</div>
-                                    </div>
-                                    <div className="flex justify-center gap-4 text-xs font-bold w-full">
-                                        <span className="text-emerald-500">✅ {ap} Aprob.</span>
-                                        <span className="text-rose-500">❌ {rep} Reprob.</span>
-                                    </div>
-                                 </div>
-                             )
-                         })()}
-                      </Card>
-                      
-                      <Card className="md:col-span-3">
-                          <h3 className="font-black text-xl mb-6">Distribución de Notas del Sistema vs Asistencia</h3>
-                          <div className="flex flex-col items-center justify-center bg-slate-900 dark:bg-slate-950 p-8 rounded-2xl relative h-64 shadow-2xl">
-                             <p className="absolute top-4 left-4 text-slate-400 font-bold text-xs uppercase tracking-widest">Gráfico de Dispersión (Datos Reales)</p>
-                             <div className="absolute left-6 bottom-8 top-12 border-l-2 border-slate-700"></div>
-                             <div className="absolute left-6 bottom-8 right-6 border-b-2 border-slate-700"></div>
-                             <span className="absolute bottom-2 text-slate-500 text-xs font-bold">Asistencia (%) &rarr;</span>
-                             <span className="absolute left-2 top-1/2 -rotate-90 text-slate-500 text-xs font-bold">&larr; Nota Sistema (P1)</span>
-
-                             {enrolledStudentsData.filter(st => !(course.withdrawnStudents || []).includes(st.email)).map((st, i) => {
-                                 const gC1 = grades.find(g => g.courseId === course.id && g.studentEmail === st.email && g.corte === 1);
-                                 if(!gC1 || gC1.p1 === undefined || gC1.p1 === '') return null;
-                                 
-                                 const atts = attendances.filter(a => a.courseId === course.id && a.studentEmail === st.email).length;
-                                 const attP = courseSessions.length === 0 ? 100 : Math.round((atts/courseSessions.length)*100);
-                                 
-                                 const bottomPos = (gC1.p1 / 5.0) * 100; 
-                                 const leftPos = attP; 
-                                 
-                                 return (
-                                     <div key={i} className="absolute w-3 h-3 rounded-full bg-brand-500 shadow-brand-500/50 shadow-lg cursor-pointer hover:scale-150 hover:bg-emerald-400 transition-all z-10 group" 
-                                          style={{ bottom: `calc(1rem + ${bottomPos * 0.8}%)`, left: `calc(1.5rem + ${leftPos * 0.8}%)` }}>
-                                         <div className="opacity-0 group-hover:opacity-100 absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-white text-slate-900 text-xs font-black p-2 rounded shadow-xl pointer-events-none whitespace-nowrap z-20">
-                                            {st.name.split(' ')[0]}<br/>Asist: {attP}% | Nota: {gC1.p1}
-                                         </div>
-                                     </div>
-                                 )
-                             })}
-                          </div>
-                      </Card>
-                  </div>
-              )}
             </div>
           );
         };
@@ -1757,9 +1690,13 @@
               let approvedCount = 0;
               let totalGrades = 0;
               grds.filter(g=>g.corte===1).forEach(g => {
-                 if(g.status) {
+                 if(g.e1 && g.e1 !== 'no_presento') {
                     totalGrades++;
-                    if(g.status === 'aprobado') approvedCount++;
+                    if(g.e1 === 'paso') approvedCount++;
+                 }
+                 if(g.e2 && g.e2 !== 'no_presento') {
+                    totalGrades++;
+                    if(g.e2 === 'paso') approvedCount++;
                  }
               });
               const passRate = totalGrades === 0 ? 0 : Math.round((approvedCount / totalGrades) * 100);
@@ -1847,6 +1784,7 @@
              showToast("Descarga completada con éxito", "success");
           };
 
+          // INYECCIÓN: GENERADOR CUSTOM DE GRÁFICOS REALES
           const CustomReportBuilder = () => {
               const [cType, setCType] = useState('bar');
               const [dim, setDim] = useState('faculty'); 
@@ -1865,7 +1803,8 @@
                       let sg = 0, cg = 0, passed = 0, teval = 0;
                       cGrds.forEach(g => {
                           if(g.p1 !== undefined && g.p1 !== '') { sg+=parseFloat(g.p1); cg++; }
-                          if(g.status) { teval++; if(g.status==='aprobado') passed++; }
+                          if(g.e1 && g.e1 !== 'no_presento') { teval++; if(g.e1==='paso') passed++; }
+                          if(g.e2 && g.e2 !== 'no_presento') { teval++; if(g.e2==='paso') passed++; }
                       });
                       const pR = teval === 0 ? 0 : (passed/teval)*100;
                       const lH = sessions.filter(s => s.courseId === c.id && s.status === 'completed' && s.completed === false).length;
@@ -2005,9 +1944,9 @@
                                {m2 && <p className="text-xs font-bold mt-2 text-slate-400">VS {m2.courses} en {comparePeriod}</p>}
                             </Card>
                             <Card className="border-t-4 border-emerald-500">
-                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Evaluación Cualitativa (C1)</p>
+                               <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] mb-2">Aprobación Total Docente</p>
                                <h3 className="text-4xl font-black">{m1.passRate}%</h3>
-                               <p className="text-[10px] font-bold mt-1 text-emerald-600/70">Aprobados por el docente</p>
+                               <p className="text-[10px] font-bold mt-1 text-emerald-600/70">C1 y C2 Combinados</p>
                                {m2 && <p className="text-xs font-bold mt-1 text-slate-400">VS {m2.passRate}% en {comparePeriod}</p>}
                             </Card>
                             <Card className="border-t-4 border-rose-500">
@@ -2270,7 +2209,6 @@
                       }
                   }
 
-                  // 1. Sincronizar Cursos y Deserción
                   let updatedCourses = 0;
                   for (let nrc in coursesMap) {
                       const existingCourse = courses.find(c => c.nrc === nrc);
@@ -2295,7 +2233,6 @@
 
                   showToast(`Listas de clase vinculadas en ${updatedCourses} asignaturas y motor de deserción actualizado. Sincronizando notas oficiales...`, "info");
 
-                  // 2. Sincronizar Notas
                   let notesCount = 0;
                   for (let g of gradesToUpdate) {
                       const course = courses.find(c => c.nrc === g.nrc);
@@ -2311,7 +2248,6 @@
                       }
                   }
 
-                  // 3. Crear perfiles faltantes (Stubs) con el programa real
                   const uniqueMissing = Array.from(new Map(missingProfiles.map(item => [item['email'], item])).values());
                   let stubsCount = 0;
                   const nowISO = new Date().toISOString();
@@ -2504,7 +2440,7 @@
                                   </td>
                                   <td className="py-4 px-4">
                                      <span className="text-slate-700 dark:text-slate-300 font-bold block">{p.email}</span>
-                                     <span className="text-[10px] text-brand-600 font-bold mt-1 block">Último acceso: {p.accessLogs && p.accessLogs.length > 0 ? new Date(p.accessLogs[0]).toLocaleString() : 'Nunca (Stub)'}</span>
+                                     <span className="text-[10px] text-brand-600 font-bold mt-1 block">Último acceso: {p.accessLogs && p.accessLogs.length > 0 ? new Date(p.accessLogs[0]).toLocaleString() : 'N/A'}</span>
                                   </td>
                                   <td className="py-4 px-4 text-center">
                                      <select
