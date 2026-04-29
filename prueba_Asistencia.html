@@ -52,7 +52,6 @@
       .grow-up { animation: growUp 1s ease-out forwards; transform-origin: bottom; }
       @keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
       
-      /* Doughnut Chart CSS */
       .doughnut-chart {
         width: 120px;
         height: 120px;
@@ -114,6 +113,28 @@
           tutorings: collection(db, 'artifacts', appId, 'public', 'data', 'tutorings'),
           events: collection(db, 'artifacts', appId, 'public', 'data', 'events'), 
           nucleos: collection(db, 'artifacts', appId, 'public', 'data', 'nucleos'),
+        };
+
+        // ============================================================================
+        // FUNCIONES DE SOPORTE (INYECCIÓN HORAS REALES)
+        // ============================================================================
+        const calculateHoursFromSchedule = (schedule) => {
+            if(!schedule) return 2; // Default
+            const match = schedule.match(/(\d{2}):(\d{2})-(\d{2}):(\d{2})/);
+            if(match) {
+                const h1 = parseInt(match[1]) + parseInt(match[2])/60;
+                const h2 = parseInt(match[3]) + parseInt(match[4])/60;
+                return Math.max(1, h2 - h1);
+            }
+            return 2;
+        };
+
+        const getDefinitive = (g) => {
+            let sum = 0; let count = 0;
+            if (g.p1 !== undefined && g.p1 !== '') { sum += parseFloat(g.p1); count++; }
+            if (g.p2 !== undefined && g.p2 !== '') { sum += parseFloat(g.p2); count++; }
+            if (g.p3 !== undefined && g.p3 !== '') { sum += parseFloat(g.p3); count++; } // Inyección P3
+            return count > 0 ? (sum / count).toFixed(1) : '--';
         };
 
         // ============================================================================
@@ -182,7 +203,6 @@
           const [selectedCourse, setSelectedCourse] = useState(null);
           const [roleOverride, setRoleOverride] = useState(null);
 
-          // INIT & AUTH LISTENER
           useEffect(() => {
             const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
               if (currentUser && currentUser.email) {
@@ -204,7 +224,6 @@
             return () => unsubscribe();
           }, []);
 
-          // FIRESTORE SYNC
           useEffect(() => {
             if (!user) return;
             setLoading(true);
@@ -271,7 +290,7 @@
                   role: role,
                   photoURL: loggedUser.photoURL,
                   createdAt: nowISO,
-                  campus: '', // Erradicados datos simulados
+                  campus: '', 
                   status: 'Activo',
                   birthDate: '', 
                   accessLogs: [nowISO] 
@@ -294,9 +313,6 @@
             setRoleOverride(null);
           };
 
-          // ============================================================================
-          // 4. LAYOUT ROUTER
-          // ============================================================================
           if (loading) return (
             <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900 fade-in">
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-brand-600 mb-4"></div>
@@ -348,7 +364,6 @@
                 </div>
               )}
 
-              {/* SIDEBAR */}
               <aside className="w-full lg:w-80 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-800 flex flex-col flex-shrink-0 z-20">
                 <div className="p-8 flex items-center gap-4 border-b border-slate-100 dark:border-slate-700">
                   <div className="bg-brand-600 p-3 rounded-2xl shadow-lg">
@@ -463,13 +478,6 @@
             return timeDiff >= 0 && timeDiff <= (30 * 24 * 60 * 60 * 1000);
           }).sort((a,b) => new Date(a.date + 'T12:00:00') - new Date(b.date + 'T12:00:00')).slice(0, 3);
 
-          const currentMonth = simulatedNow.getMonth() + 1;
-          const upcomingBirthdays = (profiles || []).filter(p => {
-             if (!p.birthDate) return false;
-             const [y, m, d] = p.birthDate.split('-');
-             return parseInt(m) === currentMonth && parseInt(d) >= simulatedNow.getDate();
-          }).sort((a,b) => parseInt(a.birthDate.split('-')[2]) - parseInt(b.birthDate.split('-')[2])).slice(0, 3);
-
           return (
             <Card className="flex flex-col h-full bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-800/80 border-t-4 border-t-brand-500 relative overflow-hidden">
               <div className="absolute top-[-20px] right-[-20px] opacity-5"><CalendarDays size={150}/></div>
@@ -506,27 +514,6 @@
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
-
-              <div className="relative z-10 mt-auto pt-6 border-t border-slate-200 dark:border-slate-700">
-                <h4 className="font-bold text-slate-500 uppercase tracking-widest text-xs mb-3 flex items-center gap-2"><Gift size={14}/> Cumpleaños este Mes</h4>
-                {upcomingBirthdays.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic">No hay cumpleaños cercanos.</p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {upcomingBirthdays.map(p => (
-                      <div key={p.id} className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900/50 flex items-center justify-center text-brand-600 font-black text-xs">
-                           {p.name.charAt(0)}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-800 dark:text-white">{p.name.split(' ')[0]}</p>
-                          <p className="text-xs text-slate-500">{new Date(p.birthDate + 'T12:00:00').toLocaleDateString('es-ES', {month: 'long', day: 'numeric'})}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
             </Card>
@@ -772,18 +759,21 @@
           const myCourses = courses.filter(c => (c.students || []).includes(profile.id) || (c.studentsEmails || []).includes(profile.email));
           
           const stats = useMemo(() => {
-            let expected = 0, attended = 0;
+            let expectedHours = 0, attendedHours = 0;
             myCourses.forEach(course => {
               if(course.withdrawnStudents && course.withdrawnStudents.includes(profile.email)) return;
 
+              const hrsPerSession = calculateHoursFromSchedule(course.schedule);
               const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
-              expected += courseSessions.length;
+              expectedHours += (courseSessions.length * hrsPerSession);
+              
               const courseAttends = attendances.filter(a => a.courseId === course.id && a.studentId === profile.id);
-              attended += courseAttends.length;
+              attendedHours += (courseAttends.length * hrsPerSession);
             });
-            const percent = expected === 0 ? 100 : Math.round((attended / expected) * 100);
+            const percent = expectedHours === 0 ? 100 : Math.round((attendedHours / expectedHours) * 100);
             const risk = percent <= 80; 
-            return { expected, attended, percent, risk, absents: expected - attended };
+            const missedHours = expectedHours - attendedHours;
+            return { expectedHours, attendedHours, missedHours, percent, risk };
           }, [myCourses, sessions, attendances, profile.id]);
 
           return (
@@ -793,33 +783,33 @@
                 <p className="text-slate-500 text-lg mt-2">Campus UNAB {profile.campus || 'Bucaramanga'} | {profile.program || 'Estudiante'}</p>
               </header>
 
-              {stats.risk && stats.expected > 0 && (
+              {stats.risk && stats.expectedHours > 0 && (
                 <div className="bg-gradient-to-r from-rose-500 to-red-600 p-8 rounded-3xl flex items-center gap-6 text-white shadow-xl">
                   <div className="bg-white/20 p-4 rounded-full"><ShieldAlert size={40} /></div>
                   <div>
                     <h3 className="font-black text-2xl">¡Alerta de Riesgo Académico!</h3>
-                    <p className="font-medium mt-1">Tu asistencia general ({stats.percent}%) es crítica. Acumulas {stats.absents} inasistencias en total.</p>
+                    <p className="font-medium mt-1">Tu asistencia general ({stats.percent}%) es crítica. Acumulas {stats.missedHours} horas de inasistencia en total.</p>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 flex flex-col gap-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card className="flex flex-col items-center justify-center py-10 text-center col-span-1 md:col-span-2">
-                      <PieChart size={64} className={stats.risk ? "text-rose-500 mb-4" : "text-emerald-500 mb-4"}/>
-                      <h3 className="text-5xl font-black">{stats.percent}%</h3>
-                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Asistencia Global</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="flex flex-col items-center justify-center py-6 text-center border-t-4 border-t-blue-500">
+                      <Clock size={40} className="text-blue-500 mb-2"/>
+                      <h3 className="text-4xl font-black">{stats.expectedHours}h</h3>
+                      <p className="font-bold text-slate-500 mt-1 uppercase tracking-widest text-[10px]">Horas Dictadas Totales</p>
                     </Card>
-                    <Card className="flex flex-col items-center justify-center py-10 text-center">
-                      <BookOpen size={64} className="text-brand-500 mb-4"/>
-                      <h3 className="text-5xl font-black">{myCourses.length}</h3>
-                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Cursos Inscritos</p>
+                    <Card className="flex flex-col items-center justify-center py-6 text-center border-t-4 border-t-emerald-500">
+                      <CheckCircle size={40} className="text-emerald-500 mb-2"/>
+                      <h3 className="text-4xl font-black">{stats.attendedHours}h</h3>
+                      <p className="font-bold text-slate-500 mt-1 uppercase tracking-widest text-[10px]">Horas Asistidas</p>
                     </Card>
-                    <Card className="flex flex-col items-center justify-center py-10 text-center border-b-4 border-b-rose-500">
-                      <AlertTriangle size={64} className="text-rose-500 mb-4"/>
-                      <h3 className="text-5xl font-black">{stats.absents}</h3>
-                      <p className="font-bold text-slate-500 mt-2 uppercase tracking-widest text-xs">Faltas Acumuladas</p>
+                    <Card className="flex flex-col items-center justify-center py-6 text-center border-t-4 border-t-rose-500">
+                      <AlertTriangle size={40} className="text-rose-500 mb-2"/>
+                      <h3 className="text-4xl font-black">{stats.missedHours}h</h3>
+                      <p className="font-bold text-slate-500 mt-1 uppercase tracking-widest text-[10px]">Horas Faltadas</p>
                     </Card>
                   </div>
                   <WeeklyAgendaWidget courses={myCourses} />
@@ -945,7 +935,7 @@
 
           const [qrRotationSpeed, setQrRotationSpeed] = useState(5); 
           
-          const [tutoringData, setTutoringData] = useState({ date: '', time: '', link: '', topic: '' });
+          const [tutoringData, setTutoringData] = useState({ date: '', time: '', endTime: '', link: '', topic: '', recurringWeeks: 1 });
 
           useEffect(() => {
             let interval;
@@ -956,7 +946,7 @@
               }, qrRotationSpeed * 1000); 
             }
             return () => clearInterval(interval);
-          }, [activeSession, profile.role, qrRotationSpeed]);
+          }, [activeSession?.id, profile.role, qrRotationSpeed]);
 
           useEffect(() => {
             setActiveSession(sessions.find(s => s.courseId === course.id && s.status === 'active') || null);
@@ -1053,7 +1043,7 @@
              const existingGrade = grades.find(g => g.courseId === course.id && g.studentEmail === studentEmail && g.corte === corte);
              
              let finalVal = value;
-             if(field !== 'obs') {
+             if(field !== 'obs' && field !== 'status') {
                  finalVal = value; 
              }
 
@@ -1063,7 +1053,7 @@
                } else {
                  await addDoc(PATHS.grades, { courseId: course.id, studentEmail: studentEmail, corte, [field]: finalVal });
                }
-               showToast(field === 'obs' ? "Observación guardada." : "Estado de evaluación actualizado.", "success");
+               showToast(field === 'obs' ? "Observación guardada." : "Dato de evaluación actualizado.", "success");
              } catch(e) { showToast("Error al guardar", "error"); }
           };
 
@@ -1086,13 +1076,23 @@
           };
 
           const handleCreateTutoring = async () => {
-             if(!tutoringData.date || !tutoringData.time || !tutoringData.topic) return showToast("Faltan datos de la tutoría", "error");
+             if(!tutoringData.date || !tutoringData.time || !tutoringData.endTime || !tutoringData.topic) return showToast("Faltan datos obligatorios de la tutoría", "error");
              try {
-                await addDoc(PATHS.tutorings, {
-                   courseId: course.id, teacherId: profile.id, ...tutoringData, status: 'scheduled', registeredStudents: []
-                });
-                showToast("Tutoría programada", "success");
-                setTutoringData({ date: '', time: '', link: '', topic: '' });
+                let currentDate = new Date(tutoringData.date + 'T12:00:00');
+                const weeks = parseInt(tutoringData.recurringWeeks) || 1;
+                
+                for(let i=0; i<weeks; i++) {
+                    const dateStr = currentDate.toISOString().split('T')[0];
+                    await addDoc(PATHS.tutorings, {
+                       courseId: course.id, teacherId: profile.id, 
+                       date: dateStr, time: tutoringData.time, endTime: tutoringData.endTime, 
+                       link: tutoringData.link, topic: tutoringData.topic, 
+                       status: 'scheduled', registeredStudents: [], attendedStudents: []
+                    });
+                    currentDate.setDate(currentDate.getDate() + 7);
+                }
+                showToast(`Tutoría(s) programada(s) por ${weeks} semana(s)`, "success");
+                setTutoringData({ date: '', time: '', endTime: '', link: '', topic: '', recurringWeeks: 1 });
              } catch(e) {
                 showToast("Error al programar tutoría", "error");
              }
@@ -1103,7 +1103,20 @@
                 await updateDoc(doc(PATHS.tutorings, tutoringId), { registeredStudents: arrayUnion(profile.email) });
                 showToast("Registrado exitosamente a la tutoría", "success");
              } catch(e) { showToast("Error al registrarse", "error"); }
-          }
+          };
+
+          const handleMarkTutoringAttendance = async (tutoringId, studentEmail, currentAttended) => {
+             try {
+                 let newAttended = [...currentAttended];
+                 if(newAttended.includes(studentEmail)) {
+                     newAttended = newAttended.filter(e => e !== studentEmail);
+                 } else {
+                     newAttended.push(studentEmail);
+                 }
+                 await updateDoc(doc(PATHS.tutorings, tutoringId), { attendedStudents: newAttended });
+                 showToast("Asistencia de tutoría actualizada", "success");
+             } catch(e) { showToast("Error", "error"); }
+          };
 
           const courseSessions = sessions.filter(s => s.courseId === course.id && s.completed);
           const courseTutorings = tutorings.filter(t => t.courseId === course.id);
@@ -1368,20 +1381,22 @@
                               <tr className="border-b-2 text-slate-400 text-[10px] uppercase tracking-widest bg-slate-50 dark:bg-slate-800">
                                  <th className="p-3">Estudiante</th>
                                  <th className="p-3 text-center border-l">Estado</th>
-                                 <th className="p-3 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" colSpan="3">Corte 1 (50%)</th>
-                                 <th className="p-3 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" colSpan="3">Corte 2 (50%)</th>
+                                 <th className="p-3 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" colSpan="4">Corte 1 (50%)</th>
+                                 <th className="p-3 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" colSpan="4">Corte 2 (50%)</th>
                               </tr>
                               <tr className="border-b-2 text-slate-400 text-[10px] uppercase tracking-widest">
                                  <th className="p-3"></th>
                                  <th className="p-3 text-center border-l"></th>
                                  
-                                 <th className="p-2 text-center border-l bg-blue-50/50 dark:bg-blue-900/20" title="Nota del Sistema (Inmutable)">N.Sist.</th>
-                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20 font-bold">Evaluación</th>
-                                 <th className="p-2 text-left bg-blue-50/50 dark:bg-blue-900/20">Observaciones (Opcional)</th>
+                                 <th className="p-2 text-center border-l bg-blue-50/50 dark:bg-blue-900/20">P1</th>
+                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20">P2</th>
+                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20">P3</th>
+                                 <th className="p-2 text-center bg-blue-50/50 dark:bg-blue-900/20 font-bold">Def</th>
 
-                                 <th className="p-2 text-center border-l bg-purple-50/50 dark:bg-purple-900/20" title="Nota del Sistema (Inmutable)">N.Sist.</th>
-                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20 font-bold">Evaluación</th>
-                                 <th className="p-2 text-left bg-purple-50/50 dark:bg-purple-900/20">Observaciones (Opcional)</th>
+                                 <th className="p-2 text-center border-l bg-purple-50/50 dark:bg-purple-900/20">P1</th>
+                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20">P2</th>
+                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20">P3</th>
+                                 <th className="p-2 text-center bg-purple-50/50 dark:bg-purple-900/20 font-bold">Def</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1390,6 +1405,9 @@
                                 const gC2 = grades.find(g => g.courseId === course.id && g.studentEmail === student.email && g.corte === 2) || {};
                                 const isWithdrawn = (course.withdrawnStudents || []).includes(student.email);
                                 
+                                const defC1 = getDefinitive(gC1);
+                                const defC2 = getDefinitive(gC2);
+
                                 return (
                                   <tr key={student.email} className={`border-b border-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isWithdrawn ? 'opacity-50' : ''}`}>
                                     <td className="p-3">
@@ -1403,30 +1421,16 @@
                                     </td>
                                     
                                     {/* CORTE 1 */}
-                                    <td className="p-2 text-center border-l bg-blue-50/20 font-black text-slate-600 dark:text-slate-300">{gC1.p1 !== undefined ? gC1.p1 : '--'}</td>
-                                    <td className="p-2 text-center bg-blue-50/20">
-                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC1.status || ''} onChange={(e)=>handleSaveGrade(student.email, 1, 'status', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
-                                            <option value="">Pendiente</option>
-                                            <option value="aprobado">✅ Aprobó</option>
-                                            <option value="reprobado">❌ Reprobó</option>
-                                        </select>
-                                    </td>
-                                    <td className="p-2 text-left bg-blue-50/20">
-                                        <input type="text" placeholder="Observación libre..." defaultValue={gC1.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
-                                    </td>
+                                    <td className="p-2 text-center border-l bg-blue-50/20"><input type="number" step="0.1" defaultValue={gC1.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p1', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className="p-2 text-center bg-blue-50/20"><input type="number" step="0.1" defaultValue={gC1.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p2', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className="p-2 text-center bg-blue-50/20"><input type="number" step="0.1" defaultValue={gC1.p3||''} onBlur={(e)=>handleSaveGrade(student.email, 1, 'p3', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className={`p-2 text-center font-black bg-blue-50/20 ${defC1 !== '--' && defC1 < 3.0 ? 'text-rose-500' : 'text-emerald-500'}`}>{defC1}</td>
 
                                     {/* CORTE 2 */}
-                                    <td className="p-2 text-center border-l bg-purple-50/20 font-black text-slate-600 dark:text-slate-300">{gC2.p1 !== undefined ? gC2.p1 : '--'}</td>
-                                    <td className="p-2 text-center bg-purple-50/20">
-                                        <select disabled={profile.role !== 'teacher' || isWithdrawn} value={gC2.status || ''} onChange={(e)=>handleSaveGrade(student.email, 2, 'status', e.target.value)} className="w-24 p-1 rounded bg-white dark:bg-slate-700 text-xs font-bold border border-slate-200 cursor-pointer">
-                                            <option value="">Pendiente</option>
-                                            <option value="aprobado">✅ Aprobó</option>
-                                            <option value="reprobado">❌ Reprobó</option>
-                                        </select>
-                                    </td>
-                                    <td className="p-2 text-left bg-purple-50/20">
-                                        <input type="text" placeholder="Observación libre..." defaultValue={gC2.obs||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'obs', e.target.value)} disabled={profile.role !== 'teacher'} className="w-full min-w-[150px] p-1.5 border border-slate-200 rounded bg-white dark:bg-slate-700 text-xs"/>
-                                    </td>
+                                    <td className="p-2 text-center border-l bg-purple-50/20"><input type="number" step="0.1" defaultValue={gC2.p1||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'p1', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className="p-2 text-center bg-purple-50/20"><input type="number" step="0.1" defaultValue={gC2.p2||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'p2', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className="p-2 text-center bg-purple-50/20"><input type="number" step="0.1" defaultValue={gC2.p3||''} onBlur={(e)=>handleSaveGrade(student.email, 2, 'p3', e.target.value)} disabled={profile.role !== 'teacher' || isWithdrawn} className="w-12 p-1 border rounded bg-white dark:bg-slate-700 text-center text-xs font-bold"/></td>
+                                    <td className={`p-2 text-center font-black bg-purple-50/20 ${defC2 !== '--' && defC2 < 3.0 ? 'text-rose-500' : 'text-emerald-500'}`}>{defC2}</td>
                                   </tr>
                                 )
                               })}
@@ -1440,19 +1444,14 @@
                          <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 1 (50%)</h3>
                          {(() => {
                             const myGrade = grades.find(g => g.courseId === course.id && g.studentEmail === profile.email && g.corte === 1) || {};
+                            const def = getDefinitive(myGrade);
                             return (
                               <div className="space-y-4">
-                                <div className="flex justify-between font-bold text-slate-600 items-center">
-                                    <span>Nota del Sistema (Oficial)</span>
-                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{myGrade.p1 !== undefined ? myGrade.p1 : '--'}</span>
-                                </div>
-                                <div className="flex justify-between font-black text-lg pt-4 border-t items-center">
-                                    <span>Evaluación Docente</span>
-                                    <span>
-                                        {myGrade.status === 'aprobado' ? <Badge color="green">✅ APROBADO</Badge> : myGrade.status === 'reprobado' ? <Badge color="red">❌ REPROBADO</Badge> : <Badge color="gray">Pendiente</Badge>}
-                                    </span>
-                                </div>
-                                {myGrade.obs && <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300"><strong>Observación Docente:</strong><br/> {myGrade.obs}</div>}
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 1</span><span>{myGrade.p1||'--'}</span></div>
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 2</span><span>{myGrade.p2||'--'}</span></div>
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 3</span><span>{myGrade.p3||'--'}</span></div>
+                                <div className="flex justify-between font-black text-lg pt-4 border-t"><span>Definitiva</span><span className={def!=='--' && def>=3 ? 'text-emerald-500' : 'text-rose-500'}>{def}</span></div>
+                                {myGrade.obs && <div className="bg-rose-50 p-3 rounded-lg border border-rose-200 text-xs text-rose-700"><strong>Observación Docente:</strong> {myGrade.obs}</div>}
                               </div>
                             )
                          })()}
@@ -1461,19 +1460,14 @@
                          <h3 className="font-black text-xl mb-4 border-b pb-2">Corte 2 (50%)</h3>
                          {(() => {
                             const myGrade = grades.find(g => g.courseId === course.id && g.studentEmail === profile.email && g.corte === 2) || {};
+                            const def = getDefinitive(myGrade);
                             return (
                               <div className="space-y-4">
-                                <div className="flex justify-between font-bold text-slate-600 items-center">
-                                    <span>Nota del Sistema (Oficial)</span>
-                                    <span className="font-black text-2xl text-slate-800 dark:text-white">{myGrade.p1 !== undefined ? myGrade.p1 : '--'}</span>
-                                </div>
-                                <div className="flex justify-between font-black text-lg pt-4 border-t items-center">
-                                    <span>Evaluación Docente</span>
-                                    <span>
-                                        {myGrade.status === 'aprobado' ? <Badge color="green">✅ APROBADO</Badge> : myGrade.status === 'reprobado' ? <Badge color="red">❌ REPROBADO</Badge> : <Badge color="gray">Pendiente</Badge>}
-                                    </span>
-                                </div>
-                                {myGrade.obs && <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-700 dark:text-slate-300"><strong>Observación Docente:</strong><br/> {myGrade.obs}</div>}
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 1</span><span>{myGrade.p1||'--'}</span></div>
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 2</span><span>{myGrade.p2||'--'}</span></div>
+                                <div className="flex justify-between font-bold text-slate-600"><span>Parcial 3</span><span>{myGrade.p3||'--'}</span></div>
+                                <div className="flex justify-between font-black text-lg pt-4 border-t"><span>Definitiva</span><span className={def!=='--' && def>=3 ? 'text-emerald-500' : 'text-rose-500'}>{def}</span></div>
+                                {myGrade.obs && <div className="bg-rose-50 p-3 rounded-lg border border-rose-200 text-xs text-rose-700"><strong>Observación Docente:</strong> {myGrade.obs}</div>}
                               </div>
                             )
                          })()}
@@ -1498,9 +1492,13 @@
                           <h3 className="font-black text-xl mb-4">Programar Nueva Tutoría</h3>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                               <input type="date" value={tutoringData.date} onChange={e=>setTutoringData({...tutoringData, date:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50"/>
-                              <input type="time" value={tutoringData.time} onChange={e=>setTutoringData({...tutoringData, time:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50"/>
+                              <div className="flex gap-2">
+                                <input type="time" title="Hora Inicio" value={tutoringData.time} onChange={e=>setTutoringData({...tutoringData, time:e.target.value})} className="w-full px-2 py-2 border rounded-xl bg-slate-50"/>
+                                <input type="time" title="Hora Fin" value={tutoringData.endTime} onChange={e=>setTutoringData({...tutoringData, endTime:e.target.value})} className="w-full px-2 py-2 border rounded-xl bg-slate-50"/>
+                              </div>
+                              <input type="number" placeholder="Semanas a repetir" min="1" max="16" value={tutoringData.recurringWeeks} onChange={e=>setTutoringData({...tutoringData, recurringWeeks:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50"/>
                               <input type="text" placeholder="Temática a reforzar" value={tutoringData.topic} onChange={e=>setTutoringData({...tutoringData, topic:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50 md:col-span-2"/>
-                              <input type="text" placeholder="Lugar / Enlace Teams" value={tutoringData.link} onChange={e=>setTutoringData({...tutoringData, link:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50 md:col-span-4"/>
+                              <input type="text" placeholder="Lugar / Enlace Teams" value={tutoringData.link} onChange={e=>setTutoringData({...tutoringData, link:e.target.value})} className="px-4 py-2 border rounded-xl bg-slate-50 md:col-span-2"/>
                           </div>
                           <Button onClick={handleCreateTutoring} variant="primary">Agendar Tutoría</Button>
                        </Card>
@@ -1517,7 +1515,7 @@
                                   return (
                                       <div key={t.id} className="border border-slate-200 dark:border-slate-700 p-5 rounded-2xl bg-white dark:bg-slate-800">
                                           <div className="flex justify-between items-start mb-2">
-                                              <Badge color="purple">{new Date(t.date).toLocaleDateString()} - {t.time}</Badge>
+                                              <Badge color="purple">{new Date(t.date).toLocaleDateString()} {t.time} - {t.endTime}</Badge>
                                               <span className="text-xs font-bold text-slate-500">{(t.registeredStudents||[]).length} Registrados</span>
                                           </div>
                                           <h4 className="font-black text-lg mb-1">{t.topic}</h4>
@@ -1527,6 +1525,22 @@
                                               <Button onClick={()=>handleRegisterForTutoring(t.id)} disabled={isRegistered} variant={isRegistered ? 'secondary' : 'outline'} className="w-full text-xs py-2">
                                                   {isRegistered ? '✅ Ya estás registrado' : 'Reservar Cupo'}
                                               </Button>
+                                          )}
+
+                                          {profile.role === 'teacher' && (
+                                              <div className="mt-4 border-t pt-4 border-slate-200 dark:border-slate-700">
+                                                 <p className="text-xs font-bold text-slate-500 mb-2">Estudiantes Registrados</p>
+                                                 {(t.registeredStudents||[]).length === 0 && <p className="text-xs text-slate-400">Nadie se ha registrado.</p>}
+                                                 {(t.registeredStudents||[]).map(email => {
+                                                     const isAttended = (t.attendedStudents||[]).includes(email);
+                                                     return (
+                                                         <div key={email} className="flex justify-between items-center text-xs p-1">
+                                                             <span className="text-slate-700 dark:text-slate-300 font-bold truncate pr-2">{email}</span>
+                                                             <button onClick={()=>handleMarkTutoringAttendance(t.id, email, t.attendedStudents||[])} className={`px-2 py-1 rounded font-bold shrink-0 ${isAttended ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>{isAttended ? 'Asistió' : 'Marcar Asist.'}</button>
+                                                         </div>
+                                                     )
+                                                 })}
+                                              </div>
                                           )}
                                       </div>
                                   )
@@ -1612,7 +1626,65 @@
           );
         };
 
-        // --- DASHBOARD DIRECTOR / ANALÍTICA CON GENERADOR CUSTOM ---
+        // ============================================================================
+        // COMPONENTES GRÁFICOS NATIVOS
+        // ============================================================================
+        const NativeBarChart = ({ data, metricName }) => {
+            if(!data || data.length === 0) return <div className="text-center p-10 text-slate-500 italic">No hay datos para graficar.</div>;
+            const max = Math.max(...data.map(d=>d.value), 1);
+            return (
+                <div className="w-full h-64 flex items-end justify-around gap-2 mt-4 px-4 relative">
+                   {data.map((d,i) => (
+                       <div key={i} className="relative flex flex-col justify-end w-full h-full group">
+                           <div className="bg-brand-500 hover:bg-brand-400 rounded-t-md transition-all grow-up relative" style={{height: `${(d.value / max) * 100}%`}}>
+                               <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs font-black px-3 py-2 rounded shadow-xl whitespace-nowrap z-50 pointer-events-none">
+                                  {d.name}: {d.value}
+                               </div>
+                           </div>
+                           <span className="text-[10px] font-bold text-slate-500 mt-2 truncate text-center max-w-full overflow-hidden" title={d.name}>{d.name}</span>
+                       </div>
+                   ))}
+                </div>
+            )
+        };
+
+        const NativeRadarChart = ({ data }) => {
+            if(!data || data.length < 3) return <div className="text-center p-10 text-slate-500">El radar requiere mínimo 3 dimensiones de agrupación.</div>;
+            const max = Math.max(...data.map(d=>d.value), 1);
+            const cx = 150, cy = 150, r = 100;
+            const len = data.length;
+
+            const points = data.map((d, i) => {
+                const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                const valR = (d.value / max) * r;
+                return `${cx + valR * Math.cos(angle)},${cy + valR * Math.sin(angle)}`;
+            }).join(' ');
+
+            return (
+                <div className="w-full flex justify-center mt-4">
+                    <svg viewBox="0 0 300 300" className="w-64 h-64 drop-shadow-xl overflow-visible">
+                        {data.map((_, i) => {
+                            const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                            return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle)} y2={cy + r * Math.sin(angle)} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4" />
+                        })}
+                        <polygon points={points} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="grow-up" style={{transformOrigin:'center'}}/>
+                        {data.map((d, i) => {
+                            const angle = (Math.PI * 2 * i) / len - Math.PI / 2;
+                            const tx = cx + (r + 20) * Math.cos(angle);
+                            const ty = cy + (r + 20) * Math.sin(angle);
+                            return (
+                                <text key={`t${i}`} x={tx} y={ty} fontSize="8" fill="#64748b" textAnchor="middle" alignmentBaseline="middle" className="font-bold uppercase tracking-widest group">
+                                    {d.name.substring(0,10)}
+                                    <title>{d.name}: {d.value}</title>
+                                </text>
+                            )
+                        })}
+                    </svg>
+                </div>
+            )
+        };
+
+        // --- DASHBOARD DIRECTOR / ANALÍTICA CON COMPARATIVAS Y DESCARGA ---
         const DirectorView = ({ courses, sessions, attendances, events, profiles, semesterConfig, grades = [], tutorings = [], nucleos = [], showToast }) => {
           
           const [analyticsTab, setAnalyticsTab] = useState('global');
@@ -1693,8 +1765,8 @@
                  let sumGrades = 0, countGrades = 0;
                  myC.forEach(c => {
                     const g = grades.find(gr => gr.courseId === c.id && gr.studentEmail === st.email && gr.corte === 1);
-                    if(g && g.p1 !== undefined) {
-                       sumGrades += g.p1;
+                    if(g && g.p1 !== undefined && g.p1 !== '') {
+                       sumGrades += parseFloat(g.p1);
                        countGrades++;
                     }
                  });
@@ -1720,6 +1792,7 @@
               });
               return { byTeacher: byT, byCourse: byC, total: filteredTuts.length };
           }, [analyticsTab, tutorings, cIdsF, profiles, filteredCourses]);
+
 
           const handleDownloadDB = () => {
              showToast("Generando copias de seguridad Excel...", "info");
@@ -1756,7 +1829,7 @@
                       const cGrds = grades.filter(g => g.courseId === c.id && g.corte === 1);
                       let sg = 0, cg = 0, passed = 0, teval = 0;
                       cGrds.forEach(g => {
-                          if(g.p1 !== undefined) { sg+=g.p1; cg++; }
+                          if(g.p1 !== undefined && g.p1 !== '') { sg+=parseFloat(g.p1); cg++; }
                           if(g.status) { teval++; if(g.status==='aprobado') passed++; }
                       });
                       const pR = teval === 0 ? 0 : (passed/teval)*100;
@@ -1844,7 +1917,7 @@
               <header className="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                 <div>
                    <h1 className="text-4xl font-black text-slate-900 dark:text-white">Analítica Institucional (Data Science)</h1>
-                   <p className="text-slate-500 font-medium mt-2">Filtros multidimensionales, generador de gráficas propio y descargas en Excel.</p>
+                   <p className="text-slate-500 font-medium mt-2">Filtros multidimensionales, comparativas y descargas de base de datos.</p>
                 </div>
                 <Button onClick={handleDownloadDB} icon={Download} variant="secondary">Descargar Excel (Backup)</Button>
               </header>
@@ -2263,6 +2336,7 @@
 
               <div className="flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-700">
                 <button onClick={()=>setAdminTab('resumen')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='resumen' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><LayoutDashboard className="inline mr-2" size={18}/> Ingesta (Excel)</button>
+                <button onClick={()=>setAdminTab('materias')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='materias' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><ListChecks className="inline mr-2" size={18}/> Gestión Materias</button>
                 <button onClick={()=>setAdminTab('usuarios')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='usuarios' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><UserCog className="inline mr-2" size={18}/> Usuarios y Logs</button>
                 <button onClick={()=>setAdminTab('calendario')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='calendario' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><PartyPopper className="inline mr-2" size={18}/> Eventos</button>
                 <button onClick={()=>setAdminTab('semestre')} className={`px-6 py-4 font-black text-sm rounded-t-2xl border-b-4 ${adminTab==='semestre' ? 'border-brand-600 text-brand-700' : 'border-transparent text-slate-500 hover:bg-slate-100'}`}><Sliders className="inline mr-2" size={18}/> Configuración Principal</button>
@@ -2301,6 +2375,42 @@
                      </Card>
                    </div>
                  </>
+              )}
+
+              {adminTab === 'materias' && (
+                 <Card className="mt-6">
+                    <h3 className="font-black text-2xl mb-6">Asignación Manual de Núcleos a Materias</h3>
+                    <p className="text-slate-500 text-sm mb-6">Reasigna cursos a diferentes líneas o núcleos temáticos si la extracción automática no fue exacta.</p>
+                    <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-2xl">
+                       <table className="w-full text-left text-sm min-w-[800px]">
+                          <thead><tr className="border-b-2 text-slate-400 uppercase tracking-widest bg-slate-50 dark:bg-slate-800/50"><th className="py-4 px-4 rounded-tl-2xl">NRC / Código</th><th className="py-4 px-4">Nombre Asignatura</th><th className="py-4 px-4 text-center rounded-tr-2xl">Núcleo Asignado</th></tr></thead>
+                          <tbody>
+                             {courses.length === 0 && <tr><td colSpan="3" className="text-center py-8 text-slate-400 font-bold">No hay materias cargadas.</td></tr>}
+                             {courses.map(c => (
+                               <tr key={c.id} className="border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                  <td className="py-4 px-4 font-bold text-brand-600">{c.nrc || c.code}</td>
+                                  <td className="py-4 px-4 font-bold text-slate-800 dark:text-white">{c.name}</td>
+                                  <td className="py-4 px-4 text-center">
+                                     <select
+                                        value={c.lineaTematica || ''}
+                                        onChange={async (e) => {
+                                           try {
+                                              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'courses', c.id), { lineaTematica: e.target.value });
+                                              showToast(`Materia ${c.nrc} reasignada.`, "success");
+                                           } catch(err) { showToast("Error al reasignar", "error"); }
+                                        }}
+                                        className="text-xs font-bold px-3 py-2 rounded-lg outline-none cursor-pointer border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 w-full"
+                                     >
+                                        <option value="">Sin Asignar</option>
+                                        {nucleos.map(n => <option key={n.code} value={n.code}>{n.code} - {n.name}</option>)}
+                                     </select>
+                                  </td>
+                               </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </Card>
               )}
 
               {adminTab === 'usuarios' && (
