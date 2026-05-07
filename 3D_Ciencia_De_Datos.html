@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador STL - Letrero 3D Studio Pro</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cookie&family=Dancing+Script:wght@700&family=Great+Vibes&family=Kaushan+Script&family=Pacifico&family=Parisienne&family=Sacramento&family=Satisfy&family=Yellowtail&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary: #00e5ff;
+            --bg-dark: #090a0f;
+            --panel-bg: rgba(15, 17, 21, 0.95);
+        }
+        body {
+            margin: 0; overflow: hidden; background-color: var(--bg-dark); color: #f1f1f1;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; height: 100vh;
+        }
+        
+        #app-topbar {
+            background: var(--panel-bg);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 15px 25px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            z-index: 10;
+            max-height: 48vh;
+            overflow-y: auto;
+            backdrop-filter: blur(20px);
+        }
+        
+        #app-topbar::-webkit-scrollbar { width: 6px; }
+        #app-topbar::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.4); border-radius: 3px; }
+
+        #canvas-container {
+            flex: 1; position: relative; width: 100%;
+            background: radial-gradient(circle at center, #1a1d24 0%, var(--bg-dark) 100%);
+        }
+
+        .section-col { display: flex; flex-direction: column; gap: 10px; }
+        
+        h1 { margin: 0 0 10px 0; font-size: 1.1rem; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;}
+        .section-title { font-size: 0.75rem; color: #888; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 4px;}
+        
+        .control-group { display: flex; flex-direction: column; gap: 4px; }
+        .control-group label { font-size: 0.75rem; color: var(--primary); font-weight: 600; display: flex; justify-content: space-between;}
+        .control-group label span { color: #fff; font-weight: normal; opacity: 0.7; }
+        .control-group select, .control-group input[type="text"] {
+            padding: 8px; border-radius: 6px; background: #1a1c23; color: white;
+            border: 1px solid #333; outline: none; font-size: 0.85rem; font-family: inherit; transition: border 0.2s;
+        }
+        .control-group select:focus, .control-group input[type="text"]:focus { border-color: var(--primary); }
+        .control-group input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer; }
+        
+        option[value="Pacifico"] { font-family: 'Pacifico', cursive; }
+        option[value="Dancing Script"] { font-family: 'Dancing Script', cursive; font-weight: bold; }
+        option[value="Yellowtail"] { font-family: 'Yellowtail', cursive; }
+        option[value="Great Vibes"] { font-family: 'Great Vibes', cursive; }
+        option[value="Satisfy"] { font-family: 'Satisfy', cursive; }
+        option[value="Kaushan Script"] { font-family: 'Kaushan Script', cursive; }
+        option[value="Cookie"] { font-family: 'Cookie', cursive; }
+        option[value="Sacramento"] { font-family: 'Sacramento', cursive; }
+        option[value="Parisienne"] { font-family: 'Parisienne', cursive; }
+        
+        .highlight-box {
+            background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2);
+            padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px;
+        }
+        
+        .btn-group { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+        .btn-export {
+            background-color: #222; color: white; border: 1px solid #444; padding: 10px;
+            font-size: 0.8rem; font-weight: 600; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+        }
+        .btn-export:hover:not(:disabled) { background-color: rgba(0, 229, 255, 0.1); border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
+        .btn-primary { background-color: var(--primary); color: #000; border-color: var(--primary); }
+        .btn-primary:hover:not(:disabled) { background-color: #00b3cc; color: #000; }
+        .btn-export:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 1.2rem; font-weight: bold; background: rgba(15, 17, 21, 0.9); padding: 20px 40px;
+            border-radius: 30px; color: var(--primary); animation: pulse 1.5s infinite; z-index: 10;
+            border: 1px solid rgba(0, 229, 255, 0.3); backdrop-filter: blur(10px);
+        }
+        @keyframes pulse { 0% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.98); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); } 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(0.98); } }
+    </style>
+</head>
+<body>
+
+    <div id="app-topbar">
+        <div class="section-col">
+            <h1><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Studio 3D</h1>
+            <div class="control-group">
+                <input type="text" id="text-line1" value="Ciencia de">
+                <input type="text" id="text-line2" value="Datos">
+            </div>
+            <div class="control-group">
+                <select id="font-select">
+                    <option value="Yellowtail">Yellowtail (Recomendada)</option>
+                    <option value="Pacifico">Pacifico</option>
+                    <option value="Dancing Script">Dancing Script</option>
+                    <option value="Great Vibes">Great Vibes</option>
+                    <option value="Satisfy">Satisfy (Elegante)</option>
+                    <option value="Kaushan Script">Kaushan Script (Dinámica)</option>
+                    <option value="Cookie">Cookie (Gruesa y amigable)</option>
+                    <option value="Sacramento">Sacramento (Fina y clásica)</option>
+                    <option value="Parisienne">Parisienne (Sofisticada)</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Grosor 2D (Bold) <span><span id="val-bold">0</span></span></label>
+                <input type="range" id="bold-slider" min="0" max="40" step="1" value="0">
+            </div>
+            <div class="control-group">
+                <label>Estiramiento Vertical (Y) <span><span id="val-scaleY">1.0</span>x</span></label>
+                <input type="range" id="scaleY-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+            </div>
+        </div>
+
+        <div class="section-col">
+            <div class="section-title">Fabricación & Texturas</div>
+            <div class="control-group highlight-box">
+                <select id="print-mode" style="margin-bottom: 5px;">
+                    <option value="pegs">Estrategia: Flotante (Palos Macho-Hembra)</option>
+                    <option value="swap">Estrategia: 1 Pieza (Color Swap / Monobloque)</option>
+                </select>
+                <select id="texture-type" style="margin-bottom: 5px;">
+                    <option value="none">Sin Textura (Letras Lisas)</option>
+                    <option value="formulas" selected>Textura: Fórmulas Data Science</option>
+                    <option value="neural">Textura: Redes Neuronales</option>
+                    <option value="hex">Textura: Hexágonos Analíticos</option>
+                    <option value="circuits">Textura: Circuitos Impresos</option>
+                </select>
+                <select id="texture-mode">
+                    <option value="negative" selected>Modo: Huecos / Grabado (Sin Material)</option>
+                    <option value="positive">Modo: Relieve Sobresaliente (Positivo)</option>
+                </select>
+            </div>
+            <div class="control-group" id="gap-container">
+                <label>Separación Flotante <span><span id="val-gap">12</span> mm</span></label>
+                <input type="range" id="gap-slider" min="5" max="30" step="1" value="12">
+            </div>
+            <div class="control-group">
+                <label>Grosor Letras (Z) <span><span id="val-depth">6</span> mm</span></label>
+                <input type="range" id="depth-slider" min="2" max="25" step="1" value="6">
+            </div>
+        </div>
+
+        <div class="section-col">
+            <div class="section-title">Perspectiva & Geometría</div>
+            <div class="control-group">
+                <label>Trayectoria Curva (Arco) <span><span id="val-arch">0</span></span></label>
+                <input type="range" id="arch-slider" min="-1.5" max="1.5" step="0.1" value="0">
+            </div>
+            <div class="control-group">
+                <label>Facetado Base (Low-Poly) <span><span id="val-geo">0</span></span></label>
+                <input type="range" id="geo-slider" min="0" max="10" step="1" value="0">
+            </div>
+            <div class="control-group">
+                <label>Perspectiva Anamórfica (X) <span><span id="val-shx">0</span></span></label>
+                <input type="range" id="shearX-slider" min="-1.0" max="1.0" step="0.1" value="0">
+            </div>
+            <div class="control-group">
+                <label>Perspectiva Anamórfica (Y) <span><span id="val-shy">0</span></span></label>
+                <input type="range" id="shearY-slider" min="-1.0" max="1.0" step="0.1" value="0">
+            </div>
+        </div>
+
+        <div class="section-col">
+            <div class="section-title">Dimensiones & Exportación</div>
+            <div class="control-group">
+                <label>Ancho Real Final <span><span id="val-width">15</span> cm</span></label>
+                <input type="range" id="width-slider" min="5" max="40" step="1" value="15">
+            </div>
+            
+            <div class="btn-group">
+                <button id="btn-base" class="btn-export">⬇ Descargar SOLO Base Blanca</button>
+                <button id="btn-letras" class="btn-export">⬇ Descargar SOLO Letras Negras</button>
+                <button id="btn-todo" class="btn-export btn-primary">⬇ Descargar TODO JUNTO</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">Sintetizando Texturas y Geometría...</div>
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x090a0f, 0.002);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / (window.innerHeight * 0.65), 0.1, 2000);
+        camera.position.set(0, -200, 350); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const updateCanvasSize = () => {
+            const topbarHeight = document.getElementById('app-topbar').offsetHeight;
+            const h = window.innerHeight - topbarHeight;
+            renderer.setSize(window.innerWidth, h);
+            camera.aspect = window.innerWidth / h;
+            camera.updateProjectionMatrix();
+        };
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        scene.environment = pmremGenerator.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+
+        const floorGeo = new THREE.PlaneGeometry(2000, 2000);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.z = -15; floor.receiveShadow = true; scene.add(floor);
+
+        const grid = new THREE.GridHelper(1000, 50, 0x00e5ff, 0x222222);
+        grid.position.z = -14.9; grid.rotation.x = Math.PI / 2;
+        grid.material.opacity = 0.15; grid.material.transparent = true; scene.add(grid);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+        const spotLight = new THREE.SpotLight(0xffffff, 2.5);
+        spotLight.position.set(100, -100, 300); spotLight.castShadow = true;
+        spotLight.shadow.mapSize.width = 2048; spotLight.shadow.mapSize.height = 2048;
+        spotLight.shadow.bias = -0.001; scene.add(spotLight);
+        
+        const backlight = new THREE.PointLight(0x00e5ff, 3.0, 800);
+        backlight.position.set(0, 0, -5); scene.add(backlight);
+
+        const mainContainer = new THREE.Group(); 
+        const baseGroup = new THREE.Group();
+        const lettersGroup = new THREE.Group();
+        mainContainer.add(baseGroup); mainContainer.add(lettersGroup);
+        scene.add(mainContainer);
+
+        let currentScaleFactor = 1; let mainCenter = new THREE.Vector3();
+        const vCanvas = document.createElement('canvas');
+        vCanvas.width = 2048; vCanvas.height = 1024;
+        const ctx = vCanvas.getContext('2d', { willReadFrequently: true });
+
+        document.getElementById('print-mode').addEventListener('change', (e) => {
+            const isSwap = e.target.value === 'swap';
+            document.getElementById('gap-container').style.display = isSwap ? 'none' : 'flex';
+            triggerBuild();
+        });
+
+        function updateUI() {
+            document.getElementById('val-bold').innerText = document.getElementById('bold-slider').value;
+            document.getElementById('val-arch').innerText = document.getElementById('arch-slider').value;
+            document.getElementById('val-geo').innerText = document.getElementById('geo-slider').value;
+            document.getElementById('val-shx').innerText = document.getElementById('shearX-slider').value;
+            document.getElementById('val-shy').innerText = document.getElementById('shearY-slider').value;
+            document.getElementById('val-width').innerText = document.getElementById('width-slider').value;
+            document.getElementById('val-depth').innerText = document.getElementById('depth-slider').value;
+            document.getElementById('val-gap').innerText = document.getElementById('gap-slider').value;
+            document.getElementById('val-scaleY').innerText = document.getElementById('scaleY-slider').value;
+        }
+
+        function perpendicularDistance(point, lineStart, lineEnd) {
+            let dx = lineEnd[0] - lineStart[0]; let dy = lineEnd[1] - lineStart[1];
+            let mag = Math.hypot(dx, dy); if(mag > 0){ dx /= mag; dy /= mag; }
+            let pvx = point[0] - lineStart[0]; let pvy = point[1] - lineStart[1];
+            let pvdot = dx * pvx + dy * pvy;
+            return Math.hypot(pvx - pvdot * dx, pvy - pvdot * dy);
+        }
+        function rdp(points, epsilon) {
+            if (points.length < 3) return points;
+            let maxDist = 0, index = 0, end = points.length - 1;
+            for (let i = 1; i < end; i++) {
+                let dist = perpendicularDistance(points[i], points[0], points[end]);
+                if (dist > maxDist) { maxDist = dist; index = i; }
+            }
+            if (maxDist > epsilon) {
+                let rec1 = rdp(points.slice(0, index + 1), epsilon);
+                let rec2 = rdp(points.slice(index), epsilon);
+                return rec1.slice(0, rec1.length - 1).concat(rec2);
+            } else { return [points[0], points[end]]; }
+        }
+
+        // DIBUJO DE PATRONES EN CANVA (Gruesos para que el hueco se note en la impresión)
+        function drawPatterns(rCtx, w, h, type) {
+            rCtx.fillStyle = 'white';
+            rCtx.strokeStyle = 'white';
+            const sW = 12; // Trazo ultra grueso para asegurar que la impresora pueda hacer el "hueco"
+            
+            if (type === 'neural') {
+                rCtx.lineWidth = sW;
+                for(let i=0; i<35; i++) {
+                    let nx = Math.random()*w, ny = Math.random()*h;
+                    rCtx.beginPath(); rCtx.arc(nx, ny, 15, 0, Math.PI*2); rCtx.fill();
+                    for(let j=0; j<3; j++) {
+                        rCtx.beginPath(); rCtx.moveTo(nx, ny); rCtx.lineTo(nx + (Math.random()-0.5)*250, ny + (Math.random()-0.5)*250); rCtx.stroke();
+                    }
+                }
+            } else if (type === 'hex') {
+                rCtx.lineWidth = sW;
+                for(let i=0; i<30; i++) {
+                    let cx = Math.random()*w, cy = Math.random()*h, r = 20 + Math.random()*30;
+                    rCtx.beginPath();
+                    for(let j=0; j<=6; j++) {
+                        let a = j * Math.PI / 3;
+                        if(j===0) rCtx.moveTo(cx + r*Math.cos(a), cy + r*Math.sin(a));
+                        else rCtx.lineTo(cx + r*Math.cos(a), cy + r*Math.sin(a));
+                    }
+                    rCtx.stroke();
+                }
+            } else if (type === 'circuits') {
+                rCtx.lineWidth = sW;
+                for(let i=0; i<40; i++) {
+                    let sx = Math.random()*w, sy = Math.random()*h;
+                    rCtx.beginPath(); rCtx.arc(sx, sy, 10, 0, Math.PI*2); rCtx.fill();
+                    rCtx.beginPath(); rCtx.moveTo(sx, sy); 
+                    let len = 50 + Math.random()*150;
+                    if (Math.random() > 0.5) { rCtx.lineTo(sx+len, sy); rCtx.lineTo(sx+len, sy+len); } 
+                    else { rCtx.lineTo(sx, sy+len); rCtx.lineTo(sx+len, sy+len); }
+                    rCtx.stroke();
+                }
+            } else if (type === 'formulas') {
+                rCtx.font = "bold 55px monospace"; // Fuente gigante para el hueco
+                const formulas = ["∑(x-μ)²", "∫e^x dx", "y=wx+b", "Δ", "∇²f", "σ(z)", "μ", "AI", "ML", "0101", "π", "∞", "O(N logN)", "P(A|B)", "Loss", "Epoch"];
+                for(let i=0; i<100; i++) {
+                    rCtx.save();
+                    rCtx.translate(Math.random()*w, Math.random()*h);
+                    rCtx.rotate((Math.random()-0.5) * 0.8); 
+                    rCtx.fillText(formulas[Math.floor(Math.random()*formulas.length)], 0, 0);
+                    rCtx.restore();
+                }
+            }
+        }
+
+        function getShapesFromCanvas(isHalo, fontName, boldness, geoFactor) {
+            ctx.clearRect(0, 0, vCanvas.width, vCanvas.height);
+            const t1 = document.getElementById('text-line1').value.trim() || ' ';
+            const t2 = document.getElementById('text-line2').value.trim() || ' ';
+            
+            const texType = document.getElementById('texture-type').value;
+            const texMode = document.getElementById('texture-mode').value;
+            
+            let fontSize = 220; ctx.font = `${fontSize}px '${fontName}'`;
+            const maxW = Math.max(ctx.measureText(t1).width, ctx.measureText(t2).width);
+            if(maxW > vCanvas.width * 0.8) fontSize *= ((vCanvas.width * 0.8) / maxW);
+            
+            ctx.font = `${fontSize}px '${fontName}'`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            const x = vCanvas.width / 2, gapY = fontSize * 0.45, y1 = vCanvas.height / 2 - gapY, y2 = vCanvas.height / 2 + gapY;
+
+            ctx.lineJoin = geoFactor > 0 ? 'miter' : 'round';
+            ctx.lineCap = geoFactor > 0 ? 'square' : 'round';
+
+            if (isHalo) {
+                ctx.lineWidth = (geoFactor > 0 ? 40 : 60) + boldness; 
+                ctx.strokeStyle = 'white'; ctx.strokeText(t1, x, y1); ctx.strokeText(t2, x, y2);
+            } else if (boldness > 0) {
+                ctx.lineWidth = boldness; ctx.strokeStyle = 'white'; ctx.strokeText(t1, x, y1); ctx.strokeText(t2, x, y2);
+            }
+            ctx.fillStyle = 'white'; ctx.fillText(t1, x, y1); ctx.fillText(t2, x, y2);
+
+            // MODO GRABADO (HUECO): Sustraemos el patrón de las letras antes de extruir
+            if (!isHalo && texType !== 'none' && texMode === 'negative') {
+                ctx.globalCompositeOperation = 'destination-out';
+                drawPatterns(ctx, vCanvas.width, vCanvas.height, texType);
+                ctx.globalCompositeOperation = 'source-over'; // Restaurar
+            }
+
+            const imgData = ctx.getImageData(0, 0, vCanvas.width, vCanvas.height);
+            const values = new Float32Array(vCanvas.width * vCanvas.height);
+            for (let i = 0; i < values.length; i++) values[i] = imgData.data[i * 4 + 3];
+
+            const contours = d3.contours().size([vCanvas.width, vCanvas.height]).thresholds([128])(values);
+            const shapes = []; if (!contours.length) return shapes;
+            
+            contours[0].coordinates.forEach(polygon => {
+                let outer = polygon[0];
+                if (isHalo && geoFactor > 0) { outer.push(outer[0]); outer = rdp(outer, geoFactor * 2.5); }
+
+                const shape = new THREE.Shape(); shape.moveTo(outer[0][0], -outer[0][1]);
+                for (let i = 1; i < outer.length; i++) shape.lineTo(outer[i][0], -outer[i][1]);
+                for (let j = 1; j < polygon.length; j++) {
+                    let holeRing = polygon[j]; 
+                    if (isHalo && geoFactor > 0) { holeRing.push(holeRing[0]); holeRing = rdp(holeRing, geoFactor * 2.5); }
+                    if(holeRing.length > 2) {
+                        const holePath = new THREE.Path(); holePath.moveTo(holeRing[0][0], -holeRing[0][1]);
+                        for (let i = 1; i < holeRing.length; i++) holePath.lineTo(holeRing[i][0], -holeRing[i][1]);
+                        shape.holes.push(holePath);
+                    }
+                }
+                shapes.push(shape);
+            });
+            return shapes;
+        }
+
+        // MODO RELIEVE (POSITIVO): Crea formas 3D adicionales pegadas a las letras
+        function getReliefShapesPositive(fontName, boldness, type) {
+            const rCtx = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+            rCtx.canvas.width = vCanvas.width; rCtx.canvas.height = vCanvas.height;
+            drawPatterns(rCtx, rCtx.canvas.width, rCtx.canvas.height, type);
+
+            rCtx.globalCompositeOperation = 'destination-in';
+            
+            const t1 = document.getElementById('text-line1').value.trim() || ' ';
+            const t2 = document.getElementById('text-line2').value.trim() || ' ';
+            let fontSize = 220; rCtx.font = `${fontSize}px '${fontName}'`;
+            const maxW = Math.max(rCtx.measureText(t1).width, rCtx.measureText(t2).width);
+            if(maxW > rCtx.canvas.width * 0.8) fontSize *= ((rCtx.canvas.width * 0.8) / maxW);
+            
+            rCtx.font = `${fontSize}px '${fontName}'`; rCtx.textAlign = 'center'; rCtx.textBaseline = 'middle';
+            const x = rCtx.canvas.width / 2, gapY = fontSize * 0.45, y1 = rCtx.canvas.height / 2 - gapY, y2 = rCtx.canvas.height / 2 + gapY;
+
+            rCtx.lineJoin = 'round'; rCtx.lineCap = 'round';
+            if (boldness > 0) { rCtx.lineWidth = boldness; rCtx.strokeStyle = 'white'; rCtx.strokeText(t1, x, y1); rCtx.strokeText(t2, x, y2); }
+            rCtx.fillStyle = 'white'; rCtx.fillText(t1, x, y1); rCtx.fillText(t2, x, y2);
+
+            const imgData = rCtx.getImageData(0, 0, rCtx.canvas.width, rCtx.canvas.height);
+            const values = new Float32Array(rCtx.canvas.width * rCtx.canvas.height);
+            for (let i = 0; i < values.length; i++) values[i] = imgData.data[i * 4 + 3];
+
+            const contours = d3.contours().size([rCtx.canvas.width, rCtx.canvas.height]).thresholds([128])(values);
+            const shapes = []; if (!contours.length) return shapes;
+            
+            contours[0].coordinates.forEach(polygon => {
+                let outer = polygon[0];
+                const shape = new THREE.Shape(); shape.moveTo(outer[0][0], -outer[0][1]);
+                for (let i = 1; i < outer.length; i++) shape.lineTo(outer[i][0], -outer[i][1]);
+                for (let j = 1; j < polygon.length; j++) {
+                    let holeRing = polygon[j]; 
+                    if(holeRing.length > 2) {
+                        const holePath = new THREE.Path(); holePath.moveTo(holeRing[0][0], -holeRing[0][1]);
+                        for (let i = 1; i < holeRing.length; i++) holePath.lineTo(holeRing[i][0], -holeRing[i][1]);
+                        shape.holes.push(holePath);
+                    }
+                }
+                shapes.push(shape);
+            });
+            return shapes;
+        }
+
+        function findPegPositions(ctx, width, height, shapes) {
+            const positions = []; const imgData = ctx.getImageData(0, 0, width, height); const data = imgData.data;
+            shapes.forEach(shape => {
+                const points = shape.getPoints(); if(points.length === 0) return;
+                let minX = width, maxX = 0, minY = height, maxY = 0;
+                points.forEach(p => { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; const cy = -p.y; if (cy < minY) minY = cy; if (cy > maxY) maxY = cy; });
+                minX = Math.max(0, Math.floor(minX)); maxX = Math.min(width - 1, Math.ceil(maxX));
+                minY = Math.max(0, Math.floor(minY)); maxY = Math.min(height - 1, Math.ceil(maxY));
+                
+                const chunks = Math.max(1, Math.ceil((maxX - minX) / 120)), chunkWidth = (maxX - minX) / chunks;
+                for(let i=0; i<chunks; i++) {
+                    let cMin = minX + i * chunkWidth, cMax = minX + (i + 1) * chunkWidth;
+                    let bestX = null, bestY = null, maxRadius = 0;
+                    for(let y = minY; y <= maxY; y += 4) {
+                        for(let x = cMin; x <= cMax; x += 4) {
+                            if (data[(Math.floor(y) * width + Math.floor(x)) * 4 + 3] > 128) {
+                                let r = 1, isSolid = true;
+                                while(isSolid && r < 20) { 
+                                    for(let angle=0; angle<Math.PI*2; angle+=1) {
+                                        let px = Math.round(x + Math.cos(angle)*r), py = Math.round(y + Math.sin(angle)*r);
+                                        if (px < 0 || px >= width || py < 0 || py >= height || data[(py * width + px) * 4 + 3] < 128) { isSolid = false; break; }
+                                    }
+                                    if (isSolid) r++;
+                                }
+                                if (r > maxRadius) { maxRadius = r; bestX = x; bestY = y; }
+                            }
+                        }
+                    }
+                    if (bestX !== null && maxRadius >= 4) positions.push({ x: bestX, y: bestY, r: maxRadius });
+                }
+            });
+            return positions;
+        }
+
+        // DEFORMACIÓN AVANZADA: Ahora soporta Estiramiento Y (ScaleY)
+        function deformGeometry(geometry, archAmount, shearMatrix, scaleY) {
+            geometry.computeBoundingBox();
+            const pos = geometry.attributes.position;
+            for(let i=0; i<pos.count; i++) {
+                let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+                // 1. Aplicar Estiramiento Y
+                y = y * scaleY;
+                // 2. Aplicar Arco
+                if (archAmount !== 0) {
+                    let bend = archAmount * -0.0003; 
+                    y += bend * (x * x); 
+                }
+                pos.setXYZ(i, x, y, z);
+            }
+            geometry.computeVertexNormals(); 
+            // 3. Aplicar Matrices (Shear/Perspectiva)
+            geometry.applyMatrix4(shearMatrix);
+        }
+
+        let debounceTimer;
+        function triggerBuild() {
+            updateUI();
+            clearTimeout(debounceTimer);
+            document.getElementById('loading').style.display = 'block';
+            document.querySelectorAll('.btn-export').forEach(b => b.disabled = true);
+            debounceTimer = setTimeout(build3DModel, 400); 
+        }
+
+        function build3DModel() {
+            const fontName = document.getElementById('font-select').value;
+            const boldness = parseFloat(document.getElementById('bold-slider').value);
+            const arch = parseFloat(document.getElementById('arch-slider').value);
+            const geoFactor = parseInt(document.getElementById('geo-slider').value);
+            const shearX = parseFloat(document.getElementById('shearX-slider').value);
+            const shearY = parseFloat(document.getElementById('shearY-slider').value);
+            const scaleY = parseFloat(document.getElementById('scaleY-slider').value);
+            
+            const isOnePiece = document.getElementById('print-mode').value === 'swap';
+            const texType = document.getElementById('texture-type').value;
+            const texMode = document.getElementById('texture-mode').value;
+
+            const uScale = 12; 
+            const targetWidthCM = parseFloat(document.getElementById('width-slider').value);
+            
+            const depthLetter = parseFloat(document.getElementById('depth-slider').value) * (uScale/10); 
+            const depthBase = 4 * uScale; 
+            const depthGap = isOnePiece ? 0 : parseFloat(document.getElementById('gap-slider').value) * (uScale/10);
+            const depthRelief = 3.0 * uScale; 
+
+            baseGroup.clear(); lettersGroup.clear();
+
+            const whiteMat = new THREE.MeshPhysicalMaterial({ 
+                color: 0xffffff, transmission: 0.2, roughness: geoFactor > 0 ? 0.3 : 0.1, 
+                flatShading: geoFactor > 0, thickness: 5.0, emissive: 0x00e5ff, emissiveIntensity: 0.15 
+            });
+            const blackMat = new THREE.MeshPhysicalMaterial({ 
+                color: 0x111111, roughness: 0.1, flatShading: geoFactor > 0, metalness: 0.7, clearcoat: 1.0, clearcoatRoughness: 0.05
+            });
+            const reliefMat = new THREE.MeshStandardMaterial({ 
+                color: 0x222222, roughness: 0.3, metalness: 0.9 
+            });
+
+            const baseShapes = getShapesFromCanvas(true, fontName, boldness, geoFactor);
+            // La función ahora hace los huecos automáticamente si texMode == 'negative'
+            const letterShapes = getShapesFromCanvas(false, fontName, boldness, 0); 
+            
+            let pegPositions = [];
+            // Si hay huecos cortando las letras, el buscador de palos evitará inteligentemente esos espacios vacíos
+            if (!isOnePiece) pegPositions = findPegPositions(ctx, vCanvas.width, vCanvas.height, letterShapes);
+            
+            const bThick = geoFactor > 0 ? uScale : 0;
+            const holeTolerance = 0.3 * uScale; 
+            
+            let baseGeo;
+            let bx, by;
+
+            if (isOnePiece) {
+                baseGeo = new THREE.ExtrudeGeometry(baseShapes, { depth: depthBase, bevelEnabled: geoFactor > 0, bevelThickness: bThick, bevelSize: bThick, bevelSegments: 1, curveSegments: geoFactor > 0 ? 1 : 12 });
+                baseGeo.computeBoundingBox();
+                bx = -0.5 * (baseGeo.boundingBox.max.x + baseGeo.boundingBox.min.x);
+                by = -0.5 * (baseGeo.boundingBox.max.y + baseGeo.boundingBox.min.y);
+                baseGeo.translate(bx, by, 0);
+
+                const baseMesh = new THREE.Mesh(baseGeo, whiteMat); 
+                baseMesh.castShadow = true; baseMesh.receiveShadow = true; baseGroup.add(baseMesh);
+
+                const baseFrontZ = depthBase + bThick;
+                
+                const letterGeo = new THREE.ExtrudeGeometry(letterShapes, { depth: depthLetter, bevelEnabled: false, curveSegments: 12 });
+                letterGeo.translate(bx, by, baseFrontZ);
+
+                let reliefGeo = null;
+                // Solo renderizar el Mesh positivo extra si está en modo relieve positivo
+                if (texType !== 'none' && texMode === 'positive') {
+                    const reliefShapes = getReliefShapesPositive(fontName, boldness, texType);
+                    if (reliefShapes.length > 0) {
+                        reliefGeo = new THREE.ExtrudeGeometry(reliefShapes, { depth: depthRelief, bevelEnabled: false, curveSegments: 4 });
+                        reliefGeo.translate(bx, by, baseFrontZ + depthLetter - 0.1); 
+                    }
+                }
+
+                const shearMatrix = new THREE.Matrix4().makeShear(0, shearX, 0, shearY, 0, 0);
+                deformGeometry(baseGeo, arch, shearMatrix, scaleY);
+                deformGeometry(letterGeo, arch, shearMatrix, scaleY);
+                if (reliefGeo) deformGeometry(reliefGeo, arch, shearMatrix, scaleY);
+                
+                const letterMesh = new THREE.Mesh(letterGeo, blackMat); letterMesh.castShadow = true; letterMesh.receiveShadow = true; lettersGroup.add(letterMesh);
+                if (reliefGeo) { const rm = new THREE.Mesh(reliefGeo, reliefMat); rm.castShadow = true; lettersGroup.add(rm); }
+
+            } else {
+                const depthBaseSolid = depthBase * 0.4;
+                const depthBaseHole = depthBase * 0.6;
+                const solidFrontZ = depthBaseSolid + bThick;
+                const baseFrontZ = solidFrontZ + depthBaseHole;
+
+                const baseSolidGeo = new THREE.ExtrudeGeometry(baseShapes, { depth: depthBaseSolid, bevelEnabled: geoFactor > 0, bevelThickness: bThick, bevelSize: bThick, bevelSegments: 1, curveSegments: geoFactor > 0 ? 1 : 12 });
+                
+                const holeBaseShapes = baseShapes.map(s => { const ns = s.clone(); ns.holes = s.holes.map(h => h.clone()); return ns; });
+                
+                pegPositions.forEach(peg => {
+                    const actualPegRadius = Math.max(1.0 * uScale, Math.min(2.5 * uScale, peg.r * 0.6));
+                    const holeRadius = actualPegRadius + holeTolerance;
+                    const path = new THREE.Path(); path.absarc(peg.x, -peg.y, holeRadius, 0, Math.PI * 2, true);
+                    for (let s of holeBaseShapes) {
+                        let inside = false; let vs = s.getPoints();
+                        for (let i=0, j=vs.length-1; i<vs.length; j=i++) {
+                            if (((vs[i].y > -peg.y) != (vs[j].y > -peg.y)) && (peg.x < (vs[j].x - vs[i].x) * (-peg.y - vs[i].y) / (vs[j].y - vs[i].y) + vs[i].x)) inside = !inside;
+                        }
+                        if (inside) { s.holes.push(path); break; }
+                    }
+                });
+
+                const baseHoleGeo = new THREE.ExtrudeGeometry(holeBaseShapes, { depth: depthBaseHole, bevelEnabled: false, curveSegments: geoFactor > 0 ? 1 : 12 });
+
+                baseSolidGeo.computeBoundingBox();
+                bx = -0.5 * (baseSolidGeo.boundingBox.max.x + baseSolidGeo.boundingBox.min.x);
+                by = -0.5 * (baseSolidGeo.boundingBox.max.y + baseSolidGeo.boundingBox.min.y);
+
+                baseSolidGeo.translate(bx, by, 0);
+                baseHoleGeo.translate(bx, by, solidFrontZ);
+
+                const bmSolid = new THREE.Mesh(baseSolidGeo, whiteMat); bmSolid.castShadow = true; bmSolid.receiveShadow = true; baseGroup.add(bmSolid);
+                const bmHole = new THREE.Mesh(baseHoleGeo, whiteMat); bmHole.castShadow = true; bmHole.receiveShadow = true; baseGroup.add(bmHole);
+
+                const letterGeo = new THREE.ExtrudeGeometry(letterShapes, { depth: depthLetter, bevelEnabled: false, curveSegments: 12 });
+                letterGeo.translate(bx, by, baseFrontZ + depthGap);
+
+                let reliefGeo = null;
+                if (texType !== 'none' && texMode === 'positive') {
+                    const reliefShapes = getReliefShapesPositive(fontName, boldness, texType);
+                    if (reliefShapes.length > 0) {
+                        reliefGeo = new THREE.ExtrudeGeometry(reliefShapes, { depth: depthRelief, bevelEnabled: false, curveSegments: 4 });
+                        reliefGeo.translate(bx, by, baseFrontZ + depthGap + depthLetter - 0.1); 
+                    }
+                }
+
+                const pegsGeos = [];
+                pegPositions.forEach(peg => {
+                    const actualPegRadius = Math.max(1.0 * uScale, Math.min(2.5 * uScale, peg.r * 0.6));
+                    const pegLength = depthBaseHole + depthGap; 
+                    const pegGeo = new THREE.CylinderGeometry(actualPegRadius, actualPegRadius, pegLength, 24);
+                    pegGeo.rotateX(Math.PI / 2);
+                    const pegZCenter = solidFrontZ + pegLength/2; 
+                    pegGeo.translate(peg.x + bx, -peg.y + by, pegZCenter);
+                    pegsGeos.push(pegGeo);
+                });
+
+                const shearMatrix = new THREE.Matrix4().makeShear(0, shearX, 0, shearY, 0, 0);
+                deformGeometry(baseSolidGeo, arch, shearMatrix, scaleY);
+                deformGeometry(baseHoleGeo, arch, shearMatrix, scaleY);
+                deformGeometry(letterGeo, arch, shearMatrix, scaleY);
+                if (reliefGeo) deformGeometry(reliefGeo, arch, shearMatrix, scaleY);
+
+                const letterMesh = new THREE.Mesh(letterGeo, blackMat); letterMesh.castShadow = true; letterMesh.receiveShadow = true; lettersGroup.add(letterMesh);
+                if (reliefGeo) { const rm = new THREE.Mesh(reliefGeo, reliefMat); rm.castShadow = true; lettersGroup.add(rm); }
+
+                pegsGeos.forEach(pg => {
+                    deformGeometry(pg, arch, shearMatrix, scaleY);
+                    const pm = new THREE.Mesh(pg, blackMat); pm.castShadow = true; lettersGroup.add(pm);
+                });
+                
+                baseGeo = baseSolidGeo; 
+            }
+
+            mainContainer.scale.set(1, 1, 1);
+            baseGeo.computeBoundingBox();
+            currentScaleFactor = (targetWidthCM * 10) / (baseGeo.boundingBox.max.x - baseGeo.boundingBox.min.x); 
+            mainContainer.scale.set(currentScaleFactor, currentScaleFactor, currentScaleFactor);
+            
+            const finalBox = new THREE.Box3().setFromObject(mainContainer);
+            mainCenter = finalBox.getCenter(new THREE.Vector3());
+            mainContainer.position.set(-mainCenter.x, -mainCenter.y, -mainCenter.z);
+
+            document.getElementById('loading').style.display = 'none';
+            document.querySelectorAll('.btn-export').forEach(b => b.disabled = false);
+        }
+
+        document.fonts.ready.then(() => {
+            updateCanvasSize();
+            window.addEventListener('resize', updateCanvasSize);
+            triggerBuild();
+        });
+        
+        const inputs = ['text-line1', 'text-line2', 'font-select', 'bold-slider', 'arch-slider', 'geo-slider', 'shearX-slider', 'shearY-slider', 'scaleY-slider', 'width-slider', 'depth-slider', 'gap-slider', 'texture-type', 'texture-mode'];
+        inputs.forEach(id => document.getElementById(id).addEventListener('input', triggerBuild));
+
+        const exporter = new THREE.STLExporter();
+        function exportMesh(group, filename) {
+            const exportGroup = new THREE.Group();
+            exportGroup.add(group.clone());
+            exportGroup.scale.set(currentScaleFactor, currentScaleFactor, currentScaleFactor);
+            exportGroup.position.set(-mainCenter.x, -mainCenter.y, 0); 
+            
+            const stlString = exporter.parse(exportGroup);
+            const blob = new Blob([stlString], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a'); link.href = url; link.download = filename; link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('btn-todo').addEventListener('click', () => {
+            const combined = new THREE.Group(); combined.add(baseGroup.clone()); combined.add(lettersGroup.clone());
+            exportMesh(combined, 'Letrero_Completo.stl');
+        });
+        document.getElementById('btn-base').addEventListener('click', () => exportMesh(baseGroup, 'Base_Blanca.stl'));
+        document.getElementById('btn-letras').addEventListener('click', () => exportMesh(lettersGroup, 'Letras_Negras.stl'));
+
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        animate();
+    </script>
+</body>
+</html>
